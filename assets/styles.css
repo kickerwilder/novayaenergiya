@@ -69,6 +69,7 @@ h1,h2,h3,h4,h5{font-family:var(--head)}
 .from b{font:700 clamp(24px,3.2vw,32px)/1.1 var(--head);margin:0 4px}
 .dlv{font:500 12.5px/1.2 var(--body);color:var(--muted);letter-spacing:.01em}
 .from .dlv{font-size:15px;font-weight:600;color:var(--accent-ink)}
+.term{margin:4px 0 0;font-size:13px;color:var(--muted)}
 .cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
 .facts{display:grid;grid-template-columns:repeat(3,minmax(0,max-content));gap:8px 30px;margin:24px 0 0;padding:0;list-style:none}
 .facts li{font-size:13.5px;line-height:1.3;color:var(--muted);max-width:150px}
@@ -241,9 +242,10 @@ details[open]>summary::before{content:"–"}
 .pricenote,#footprice{font-weight:500}
 
 /* контакты */
-.contacts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:760px}
+.contacts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .contacts>div{background:var(--panel);border:1.5px solid var(--line);border-radius:8px;padding:16px 18px}
 .contacts h3{margin:0 0 6px;font:600 14px var(--body);color:var(--muted)}
+.term-card{margin:0;min-height:44px;display:flex;align-items:center;font:600 16px/1.35 var(--body)}
 .big-link{display:inline-flex;align-items:center;min-height:44px;font:700 clamp(18px,2.2vw,22px) var(--head);color:var(--ink);text-decoration:none;overflow-wrap:anywhere}
 .big-link:hover{color:var(--accent-ink);text-decoration:underline}
 
