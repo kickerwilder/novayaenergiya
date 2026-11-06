@@ -358,5 +358,53 @@ document.getElementById("gl").innerHTML=D.glossary.map(function(g){return '<dt>'
   upd();
 })();
 
+/* компьютер (мышь): клик по tel: копирует номер и показывает уведомление; на телефонах и без JS ссылка работает как есть */
+(function(){
+  if(!window.matchMedia||!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+  var toast=null, timer=0;
+  function fmt(h){
+    var d=h.replace(/\D/g,"");
+    return d.length===11?"+"+d[0]+" "+d.slice(1,4)+" "+d.slice(4,7)+"-"+d.slice(7,9)+"-"+d.slice(9):"+"+d;
+  }
+  function copy(text){
+    if(navigator.clipboard&&navigator.clipboard.writeText&&window.isSecureContext){
+      return navigator.clipboard.writeText(text).catch(function(){return fallback(text);});
+    }
+    return Promise.resolve(fallback(text));
+  }
+  function fallback(text){
+    var ta=document.createElement("textarea"), ok=false;
+    ta.value=text; ta.setAttribute("readonly",""); ta.setAttribute("aria-hidden","true");
+    ta.style.cssText="position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+    document.body.appendChild(ta); ta.select();
+    try{ok=document.execCommand("copy");}catch(e){}
+    document.body.removeChild(ta);
+    if(!ok) throw new Error("copy failed");
+  }
+  function show(msg){
+    if(!toast){
+      toast=document.createElement("div");
+      toast.className="toast"; toast.setAttribute("role","status"); toast.setAttribute("aria-live","polite");
+      document.body.appendChild(toast);
+    }
+    clearTimeout(timer);
+    toast.textContent=msg;
+    void toast.offsetWidth;
+    toast.classList.add("on");
+    timer=setTimeout(function(){toast.classList.remove("on");},3000);
+  }
+  document.addEventListener("click",function(e){
+    if(e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey) return;
+    var a=e.target.closest&&e.target.closest('a[href^="tel:"]');
+    if(!a) return;
+    e.preventDefault();
+    var num=fmt(a.getAttribute("href").slice(4));
+    Promise.resolve().then(function(){return copy(num);}).then(
+      function(){show("Номер скопирован: "+num);},
+      function(){show("Не удалось скопировать. Номер: "+num);}
+    );
+  });
+})();
+
 buildMap(); render();
 })();

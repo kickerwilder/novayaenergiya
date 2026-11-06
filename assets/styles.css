@@ -313,7 +313,9 @@ details[open]>summary::before{content:"–"}
   .gl dd{border-top:0;padding-top:2px}
   .frow .lbl{min-width:100%}
 }
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.card.flash{animation:none}.mk{transition:none}
+.toast{position:fixed;left:50%;bottom:24px;z-index:30;max-width:calc(100vw - 32px);padding:12px 18px;border-radius:8px;background:var(--ink);color:#fff;font:600 14.5px/1.35 var(--body);text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.25);opacity:0;transform:translate(-50%,12px);pointer-events:none;transition:opacity .25s ease,transform .25s ease}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.toast{transition:none}.card.flash{animation:none}.mk{transition:none}
   .js .reveal,.js .reveal.in{opacity:1;transform:none;transition:none}
   .stage .s,.bar::after,.brand,.pic .ph .ghost{transition:none}
   .bar.scrolled .brand{transform:none}}
