@@ -56,7 +56,7 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
       <ul class="facts reveal">
         <li><b data-fact="combos">29</b>комбинаций мощности и ёмкости</li>
         <li><b data-fact="bodies">2</b>варианта корпуса</li>
-        <li><b data-fact="cycles">3500+</b>циклов заряда</li>
+        <li><b data-fact="cycles">2000+</b>циклов заряда</li>
       </ul>
     </div>
     <div class="hero-vis">
@@ -78,7 +78,9 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
 
   <section class="sec reveal" aria-labelledby="mh">
     <h2 id="mh">Карта моделей</h2>
-    <p class="lead">Каждая точка — одна комбинация мощности и ёмкости. Чем правее — тем мощнее станция, чем выше — тем дольше она работает. Нажмите на точку, чтобы перейти к карточке.</p>
+    <p class="lead lead-map">Каждая точка — одна комбинация мощности и ёмкости. Чем правее — тем мощнее станция, чем выше — тем дольше она работает. Нажмите на точку, чтобы перейти к карточке.</p>
+    <p class="lead lead-acc">Выберите группу по ёмкости, затем мощность: откроется карточка модели.</p>
+    <div class="macc" id="macc"></div>
     <div class="map"><div class="mapscroll"><div id="map"></div></div>
       <div class="mapnote"><span><i class="k1"></i>только тёмный корпус</span><span><i class="k2"></i>только светлый на колёсах</span><span><i class="k3"></i>есть оба варианта</span><span id="mapfit"></span></div>
     </div>
@@ -90,6 +92,7 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
       <p class="sub">Отметьте приборы, которые нужно включить одновременно. Подойдут только станции с достаточной мощностью.</p>
       <div class="loads" id="loads"></div>
       <div class="pickrow" id="pickrow"></div>
+      <p class="picknote">К домашней сети подключайте только через переключатель ввода, который устанавливает электрик. Через одну розетку не больше её предела (смотрите карточку модели).</p>
     </div>
   </section>
 
@@ -140,15 +143,15 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
     <div class="contacts">
       <div><h3>Телефон</h3><a class="big-link" href="tel:+79787280002">+7 978 728-00-02</a></div>
       <div><h3>E-mail</h3><a class="big-link" href="mailto:apv0050@gmail.com">apv0050@gmail.com</a></div>
-      <div><h3>Доставка</h3><p class="term-card">Срок доставки в Россию: около 25 дней</p></div>
+      <div><h3>Доставка и гарантия</h3><p class="term-card">Срок доставки в Россию: около 25 дней</p><p class="term-card wty-card" data-warranty>Гарантия 6 месяцев. Продление до 12 месяцев: +10 000 ₽</p></div>
     </div>
   </section>
 
   <footer class="foot">
     <p class="foot-brand">НОВАЯ ЭНЕРГИЯ</p>
     <p class="req"><a href="tel:+79787280002">+7 978 728-00-02</a> · <a href="mailto:apv0050@gmail.com">apv0050@gmail.com</a></p>
-    <p id="footprice" hidden>Цена с доставкой. Срок доставки в Россию: около 25 дней. Срок ориентировочный. Цены указаны в рублях и не являются публичной офертой.</p>
-    <p>Время работы — расчётная оценка: ёмкость × 0,85 (потери инвертора) ÷ мощность приборов. Реальное время зависит от температуры, износа батареи и пусковых токов: у холодильника и электроинструмента они выше номинала.</p>
+    <p id="footprice" hidden>Цена с доставкой. Срок доставки в Россию: около 25 дней. Срок ориентировочный. Гарантия 6 месяцев, продление до 12 месяцев: +10 000 ₽. Цены указаны в рублях и не являются публичной офертой.</p>
+    <p>Время работы — расчётная оценка: ёмкость × 0,85 (потери инвертора) ÷ средняя мощность приборов. Реальное время зависит от температуры, износа батареи и пусковых токов: у холодильника и электроинструмента они выше номинала.</p>
     <p>Номинальная мощность указана для сети 220 В. Характеристики предварительные; тип розеток, комплектация и внешний вид уточняются перед заказом.</p>
   </footer>
 </div>
@@ -161,6 +164,7 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
 <script src="assets/reveal.js"></script>
 <script src="data/catalog.js"></script>
 <script src="data/prices.js"></script>
+<script src="data/charge.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>
