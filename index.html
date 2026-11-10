@@ -14,10 +14,11 @@
 <meta property="og:description" content="Каталог портативных электростанций на литий-железо-фосфатных батареях: 29 комбинаций мощностью от 0,8 до 8 кВт и ёмкостью от 1,5 до 23 кВт·ч, два варианта корпуса. Цены с доставкой, подбор по приборам и расчёт времени работы.">
 <meta property="og:locale" content="ru_RU">
 <meta property="og:url" content="https://kickerwilder.github.io/novayaenergiya/">
-<meta property="og:image" content="https://kickerwilder.github.io/novayaenergiya/img/scene-light.jpg">
-<meta property="og:image:width" content="640">
-<meta property="og:image:height" content="359">
+<meta property="og:image" content="https://kickerwilder.github.io/novayaenergiya/img/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://kickerwilder.github.io/novayaenergiya/img/og.jpg">
 <script>
 /* Скрытое состояние для анимаций включается только если скрипты работают. Если reveal.js не загрузился, контент показывается через 3 с */
 document.documentElement.classList.add("js");
@@ -61,11 +62,9 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
     </div>
     <div class="hero-vis">
       <div class="stage" id="stage">
-        <img class="s on" id="sceneD" src="img/scene-dark.jpg" width="640" height="359" alt="Иллюстрация: электростанция в тёмном корпусе" fetchpriority="high">
-        <img class="s" id="sceneL" src="img/scene-light.jpg" width="640" height="359" alt="Иллюстрация: электростанция в светлом корпусе на колёсах" loading="lazy">
-        <span class="stagetag" id="stagetag">Тёмный корпус</span>
+        <video id="heroVideo" muted loop playsinline autoplay preload="metadata" poster="img/hero-poster.jpg" data-src="img/hero.mp4" width="1280" height="720" aria-label="Иллюстративное видео: две портативные электростанции, тёмная и светлая, у дома вечером"></video>
       </div>
-      <p class="illus">Изображение иллюстративное</p>
+      <p class="illus">Видео иллюстративное</p>
       <div class="hkinds" id="hkinds" role="group" aria-label="Вариант корпуса (быстрый выбор)"></div>
     </div>
   </section>
@@ -74,6 +73,24 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
     <h2 id="kh2">Вариант корпуса</h2>
     <p class="lead">Выберите корпус, и каталог покажет только его. В шапке страницы и в карточках выбор одинаковый.</p>
     <div class="kinds" id="kinds" role="group" aria-label="Вариант корпуса"></div>
+  </section>
+
+  <section class="sec reveal" aria-labelledby="uh" id="uses">
+    <h2 id="uh">Где пригодится</h2>
+    <div class="uses">
+      <figure class="use">
+        <img src="img/scene-house.jpg" alt="Иллюстрация: светлая станция на колёсах у входа в дом вечером, провод тянется к розетке на корпусе" loading="lazy" width="1200" height="896">
+        <figcaption><b>Резерв для дома</b><span>Холодильник, котёл, свет и роутер при отключении света</span><small>Изображение иллюстративное</small></figcaption>
+      </figure>
+      <figure class="use">
+        <img src="img/scene-room.jpg" alt="Иллюстрация: тёмная станция на столе в квартире, рядом роутер и ноутбук, за окном вечерний город" loading="lazy" width="1200" height="896">
+        <figcaption><b>Квартира</b><span>Роутер, ноутбук и свет при отключении света</span><small>Изображение иллюстративное</small></figcaption>
+      </figure>
+      <figure class="use">
+        <img src="img/scene-pair.jpg" alt="Иллюстрация: светлая станция на колёсах во дворе дома и тёмная станция в комнате, обе с подключёнными приборами" loading="lazy" width="1200" height="896">
+        <figcaption><b>Дача и отдых</b><span>Свет, холодильник, инструмент без розетки</span><small>Изображение иллюстративное</small></figcaption>
+      </figure>
+    </div>
   </section>
 
   <section class="sec reveal" aria-labelledby="mh">
@@ -126,7 +143,7 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
   <section class="sec reveal" aria-labelledby="hh">
     <h2 id="hh">Как выбрать</h2>
     <div class="how">
-      <div><h3>1. Мощность в ваттах</h3><p>Сложите мощность приборов, которые будут работать одновременно. Чайник 1500 Вт и ноутбук 60 Вт — это 1560 Вт: станция должна уметь не меньше. Берите запас 20–30 %.</p></div>
+      <div><h3>1. Мощность в ваттах</h3><p>Сложите мощность приборов, которые будут работать одновременно. Чайник 2000 Вт и ноутбук 60 Вт — это 2060 Вт: станция должна уметь не меньше. Берите запас 20–30 %.</p></div>
       <div><h3>2. Ёмкость в ватт-часах</h3><p>Это запас энергии. Прибор на 100 Вт проработает от 1000 Вт·ч около 8–9 часов с учётом потерь. Для ночи с холодильником и светом хватит 1,5–2,5 кВт·ч, для резерва дома на сутки нужно от 10 кВт·ч.</p></div>
       <div><h3>3. Корпус и вес</h3><p>Тёмный металлический ящик удобен как переносной. Светлый вариант на колёсах с выдвижной ручкой нужен там, где станцию приходится перевозить: он тяжелее, зато не нужно поднимать вес.</p></div>
     </div>

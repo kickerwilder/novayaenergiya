@@ -62,29 +62,22 @@ var KINDS=[
 ];
 function kindCount(k){return D.combos.filter(function(c){return k==="all"||c.vers[k]}).length}
 function setVer(key){state.ver=key;state.cv={};render();}
-function kindPic(key,cls,w,h){
-  var im=function(k){return '<img src="'+D.scenes[k]+'" alt="" width="'+w+'" height="'+h+'" loading="lazy">'};
+function kindPic(key,cls){
+  var im=function(k){return '<img src="'+D.photos[k]+'" alt="" width="1200" height="896" loading="lazy">'};
   return key==="all"?'<span class="'+cls+' duo">'+im("D")+im("L")+'</span>':'<span class="'+cls+'">'+im(key)+'</span>';
-}
-/* hero: сцена показывает последний выбранный корпус; при «Все» остаётся прежняя */
-var heroSide="D", sceneEl={D:document.getElementById("sceneD"),L:document.getElementById("sceneL")}, stageTag=document.getElementById("stagetag");
-function renderHero(){
-  if(state.ver==="D"||state.ver==="L") heroSide=state.ver;
-  ["D","L"].forEach(function(k){ if(sceneEl[k]) sceneEl[k].classList.toggle("on",k===heroSide); });
-  if(stageTag) stageTag.textContent=D.versions[heroSide].name;
 }
 function renderKinds(){
   if(!kindsEl.children.length){ /* строится один раз: счётчики из DATA, фокус не теряется при перерисовках */
     KINDS.forEach(function(k){
       var n=kindCount(k.key), cnt=n+' '+plural(n,["модель","модели","моделей"]);
       var b=document.createElement("button"); b.type="button"; b.className="kind"; b.dataset.kind=k.key;
-      b.innerHTML=kindPic(k.key,"kpic",640,359)+'<span class="kt"><b>'+k.title+'</b><span class="ka">'+k.act+'</span><span class="kn">'+cnt+'</span></span>';
+      b.innerHTML=kindPic(k.key,"kpic")+'<span class="kt"><b>'+k.title+'</b><span class="ka">'+k.act+'</span><span class="kn">'+cnt+'</span></span>';
       b.addEventListener("click",function(){setVer(k.key)});
       kindsEl.appendChild(b);
       if(hkEl){
         var h=document.createElement("button"); h.type="button"; h.className="hk"; h.dataset.kind=k.key;
         h.setAttribute("aria-label",k.act+" ("+cnt+")");
-        h.innerHTML=kindPic(k.key,"hpic",64,36)+'<span class="ht">'+(k.key==="all"?"Все":D.versions[k.key].short)+'</span>';
+        h.innerHTML=kindPic(k.key,"hpic")+'<span class="ht">'+(k.key==="all"?"Все":D.versions[k.key].short)+'</span>';
         h.addEventListener("click",function(){setVer(k.key)});
         hkEl.appendChild(h);
       }
@@ -93,7 +86,6 @@ function renderKinds(){
   [kindsEl,hkEl].forEach(function(box){ if(!box) return;
     Array.prototype.forEach.call(box.children,function(b){b.setAttribute("aria-pressed",state.ver===b.dataset.kind?"true":"false")});
   });
-  renderHero();
 }
 
 /* ---- подбор по нагрузке ---- */
@@ -285,7 +277,7 @@ function cardHtml(c,S,open){
     seg='<div class="vsw" role="group" aria-label="Вариант корпуса">'+["D","L"].map(function(k){
       var VV=c.vers[k], pr=priceOf(VV.code);
       return '<button type="button" class="vbtn" data-act="ver" data-id="'+c.id+'" data-v="'+k+'" aria-pressed="'+(k===v)+'">'+
-        '<img src="'+VV.img+'" alt="" width="56" height="48" loading="lazy">'+
+        '<img src="'+VV.img+'" alt="" width="1200" height="896" loading="lazy">'+
         '<span class="vt"><b>'+esc(D.versions[k].short)+'</b><span class="vp'+(pr?'':' none')+'">'+(pr?fmtPrice(pr):SETTINGS.noPriceText)+'</span>'+(pr?'<small class="dlv">'+SETTINGS.deliveryText+'</small>':'')+'</span>'+
         '<i class="tick" aria-hidden="true">✓</i></button>'}).join("")+'</div>';
   }else seg='<div class="only">'+(v==="D"?"Только тёмный корпус":"Только светлый на колёсах")+'</div>';
@@ -312,7 +304,8 @@ function cardHtml(c,S,open){
   var rows=V.rows.map(function(r){return '<tr><th>'+esc(r[0])+'</th><td>'+esc(r[1])+'</td></tr>'}).join("");
   var rtt='<h5>На что хватает (расчётная оценка)</h5><table>'+rt.map(function(r){
     var w=r.l.watts?' ('+N(r.l.watts)+' Вт'+(r.l.avg&&r.l.avg!==r.l.watts?', в среднем '+N(r.l.avg)+' Вт':'')+')':'';
-    return '<tr><th>'+esc(r.l.name+w)+'</th><td'+(r.ok?'':' class="no"')+'>'+esc(r.text)+'</td></tr>'}).join("")+'</table>'+
+    var low=r.ok&&r.l.watts!=null&&la(r.l)<=100, tx=low?r.text.replace("≈ ","до ")+" *":r.text;
+    return '<tr><th>'+esc(r.l.name+w)+'</th><td'+(r.ok?'':' class="no"')+'>'+esc(tx)+'</td></tr>'}).join("")+'</table>'+
     '<p class="fn">Время расчётное. Не учитывает собственное потребление станции при включённом инверторе (по паспорту изделия до 50 Вт): у приборов до 100 Вт фактическое время может быть меньше. Мелкие устройства лучше заряжать через USB.</p>';
   var saf=D.safety&&D.safety.length?'<h5>Безопасность</h5><ul class="warn">'+D.safety.map(function(u){return '<li>'+esc(u)+'</li>'}).join("")+'</ul>':'';
   var chg='<details class="more chg"'+(open.c?' open':'')+'><summary>Зарядка</summary><div class="cbody"><ul>'+chargeHtml(V,c).map(function(u){return '<li>'+esc(u)+'</li>'}).join("")+'</ul></div></details>';
@@ -322,7 +315,7 @@ function cardHtml(c,S,open){
   var lim=V.limits&&V.limits.length?'<h5>Ограничения</h5><ul class="warn">'+V.limits.map(function(u){return '<li>'+esc(u)+'</li>'}).join("")+'</ul>':'';
   return '<li class="card'+(ok?'':' off')+'" id="card-'+c.id+'" data-id="'+c.id+'">'+
    '<div class="main">'+
-     '<div class="pic"><div class="ph"><img src="'+V.img+'" alt="'+esc(D.versions[v].name+': '+c.title)+'" loading="lazy" width="320" height="260"></div>'+seg+'</div>'+
+     '<div class="pic"><div class="ph"><img src="'+V.img+'" alt="'+esc(D.versions[v].name+': '+c.title)+'" loading="lazy" width="1200" height="896"></div>'+seg+'</div>'+
      '<div class="info"><p class="grp">'+esc(c.group)+' · '+esc(V.design)+'</p>'+
        '<div class="hd"><h3>'+esc(c.title)+'</h3><span class="code">'+V.code+'</span></div>'+sp+l2+
        '<div class="tags">'+tags+'</div></div>'+
@@ -494,6 +487,23 @@ document.getElementById("gl").innerHTML=D.glossary.map(function(g){return '<dt>'
       function(){show("Не удалось скопировать. Номер: "+num);}
     );
   });
+})();
+
+/* hero-видео: адрес файла лежит в data-src и подставляется скриптом, поэтому без JS, при prefers-reduced-motion
+   и при экономии трафика (saveData) файл не загружается и виден постер. Вне экрана видео стоит на паузе. */
+(function(){
+  var v=document.getElementById("heroVideo"); if(!v) return;
+  var rm=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)"), sd=navigator.connection&&navigator.connection.saveData;
+  function allowed(){return !(rm&&rm.matches)&&!sd}
+  if(!allowed()){ v.removeAttribute("autoplay"); return; }
+  v.src=v.getAttribute("data-src");
+  if(!("IntersectionObserver" in window)) return;
+  new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      if(e.isIntersecting&&allowed()){ var p=v.play(); if(p&&p.catch) p.catch(function(){}); }
+      else v.pause();
+    });
+  },{threshold:0.15}).observe(v);
 })();
 
 buildMap(); buildAcc(); render();

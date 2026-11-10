@@ -16,6 +16,8 @@
       import_prices.py  загрузка цен из CSV или таблицы владельца (XLSX) в data/prices.js
       split.py          одноразовый скрипт, которым index.html был разнесён по файлам
       update_data_v2.py скрипт обновления data/catalog.js (ресурс, пик, розетки, приборы); повторный запуск безопасен
+      process_media.py  обработка фото и видео владельца в img/ (нужны Pillow и ffmpeg)
+      update_media.py   привязка фото и схем к data/catalog.js (запускать после process_media.py)
 
 Порядок подключения в `index.html`: `assets/reveal.js`, `data/catalog.js`, `data/prices.js`, `data/charge.js`, `assets/app.js` (обычные `<script src>`, без `type=module`).
 
@@ -75,6 +77,29 @@
 - **Зарядка:** `data/charge.js`, ключ — код версии, поля `acW` (Вт) и `basis` (`passport` или `estimate`). Время 0–80 % = 0,8·E/(P·0,9), 0–100 % = E/(P·0,9)·1,2, где E — ёмкость в Вт·ч, P — `acW`; округление до 0,1 ч. У версий без записи показывается «Время зарядки уточняется». Не выдумывайте значения: добавляйте только по данным владельца.
 - **Карта моделей:** шире 760 px — график, на 760 px и уже — «гармошка» по группам (`DATA.groups`), открыта одна группа за раз.
 - Правки каталога делаются скриптом `scripts/update_data_v2.py`; не правьте `data/catalog.js` вручную.
+
+## Фото и видео
+
+Исходники лежат **вне репозитория**, в папке `photos` рядом с ним (`..\photos`), и никогда не коммитятся. Нужны 11 файлов:
+
+| Файл | Что это | Куда попадает |
+| --- | --- | --- |
+| `hero.mp4` | видео для шапки | `img/hero.mp4` (без звука, 1280 px, H.264, до 2 МБ) и постер `img/hero-poster.jpg` (кадр около 4-й секунды) |
+| `black-station.jpg` | тёмный корпус, «ящик» | `img/photo-black.jpg` |
+| `black-cabinet.jpg` | тёмный корпус, «шкаф» | `img/photo-cabinet.jpg` |
+| `white-station.jpg` | светлый корпус на колёсах | `img/photo-white.jpg` |
+| `scene-house.jpg`, `scene-room.jpg`, `scene-pair.jpg` | сцены для блока «Где пригодится» | `img/scene-*.jpg`; из `scene-pair.jpg` ещё `img/og.jpg` (1200×630) для ссылок в мессенджерах |
+| `diagram-black-box.jpg`, `diagram-black-cabinet.jpg` | схемы портов тёмных версий | `img/diagram-black-*.jpg` (ширина 900 px) |
+| `diagram-white-4.jpg`, `diagram-white-5.jpg` | схемы портов светлых версий (2×10 А + 2×16 А и 3×10 А + 2×16 А) | `img/diagram-white-*.jpg` |
+
+Как обновить:
+
+1. Положите файлы в `..\photos` (или укажите другую папку аргументом).
+2. `pip install Pillow`. Для видео нужен ffmpeg: он есть в PATH или в пакете `imageio-ffmpeg` (`pip install imageio-ffmpeg`, лучше во временное окружение вне репозитория). Без ffmpeg видео копируется как есть, и скрипт пишет его вес.
+3. `python scripts/process_media.py` (или `python scripts/process_media.py D:\другая\папка`). Скрипт идемпотентный, печатает размеры и вес результата. Недостающие исходники пропускаются, прежние файлы остаются.
+4. `python scripts/update_media.py`: прописывает фото и схемы в `data/catalog.js` (поля `img`, `diagram`, `dh`, `DATA.photos`).
+
+Фото, видео и схемы иллюстративные: на странице есть подписи «Видео иллюстративное» и «Изображение иллюстративное». Видео в шапке стоит на паузе вне экрана, не запускается автоматически при `prefers-reduced-motion` и включённой экономии трафика (тогда виден постер).
 
 ## Выбор корпуса
 
