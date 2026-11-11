@@ -61,6 +61,8 @@ var KINDS=[
   {key:"L",title:"Светлый на колёсах",act:"Показать только светлые"}
 ];
 function kindCount(k){return D.combos.filter(function(c){return k==="all"||c.vers[k]}).length}
+function kindCountText(k){var n=kindCount(k); return k==="all"?n+" "+plural(n,["модель","модели","моделей"]):n+" из "+D.combos.length}
+function bothCount(){return D.combos.filter(function(c){return c.vers.D&&c.vers.L}).length}
 function setVer(key){state.ver=key;state.cv={};render();}
 function kindPic(key,cls){
   var im=function(k){return '<img src="'+D.photos[k]+'" alt="" width="1200" height="896" loading="lazy">'};
@@ -69,20 +71,22 @@ function kindPic(key,cls){
 function renderKinds(){
   if(!kindsEl.children.length){ /* строится один раз: счётчики из DATA, фокус не теряется при перерисовках */
     KINDS.forEach(function(k){
-      var n=kindCount(k.key), cnt=n+' '+plural(n,["модель","модели","моделей"]);
+      var cnt=kindCountText(k.key);
       var b=document.createElement("button"); b.type="button"; b.className="kind"; b.dataset.kind=k.key;
       b.innerHTML=kindPic(k.key,"kpic")+'<span class="kt"><b>'+k.title+'</b><span class="ka">'+k.act+'</span><span class="kn">'+cnt+'</span></span>';
       b.addEventListener("click",function(){setVer(k.key)});
       kindsEl.appendChild(b);
       if(hkEl){
         var h=document.createElement("button"); h.type="button"; h.className="hk"; h.dataset.kind=k.key;
-        h.setAttribute("aria-label",k.act+" ("+cnt+")");
+        h.setAttribute("aria-label",k.act+" ("+cnt+(k.key==="all"?"":" моделей")+")");
         h.innerHTML=kindPic(k.key,"hpic")+'<span class="ht">'+(k.key==="all"?"Все":D.versions[k.key].short)+'</span>';
         h.addEventListener("click",function(){setVer(k.key)});
         hkEl.appendChild(h);
       }
     });
   }
+  var note=document.getElementById("kindsNote");
+  if(note&&!note.textContent){var nb=bothCount(); note.textContent=nb+" "+plural(nb,["модель есть","модели есть","моделей есть"])+" в обоих корпусах";}
   [kindsEl,hkEl].forEach(function(box){ if(!box) return;
     Array.prototype.forEach.call(box.children,function(b){b.setAttribute("aria-pressed",state.ver===b.dataset.kind?"true":"false")});
   });
@@ -136,52 +140,7 @@ function renderFilters(){
 }
 
 /* ---- карта ---- */
-var mapEl=document.getElementById("map"), tip=document.getElementById("tip");
-var MW=760, MH=380, ML=62, MR=16, MT=14, MB=44;
-var PX=D.powers.map(function(p,i){return ML+(MW-ML-MR)*(i+.5)/D.powers.length});
-var CMIN=1000, CMAX=24000;
-function yOf(c){return MT+(MH-MT-MB)*(1-(Math.sqrt(c)-Math.sqrt(CMIN))/(Math.sqrt(CMAX)-Math.sqrt(CMIN)))}
-function buildMap(){
-  var s='<svg viewBox="0 0 '+MW+' '+MH+'" role="group" aria-label="Карта моделей: мощность и ёмкость">';
-  [1500,3000,6000,10000,15000,23000].forEach(function(c){
-    var y=yOf(c); s+='<line class="ax" x1="'+ML+'" x2="'+(MW-MR)+'" y1="'+y+'" y2="'+y+'"/><text class="tick" x="'+(ML-8)+'" y="'+(y+4)+'" text-anchor="end">'+kwh(c)+'</text>';
-  });
-  s+='<text class="atl" x="'+(ML-8)+'" y="'+(MT-2)+'" text-anchor="end">кВт·ч</text>';
-  D.powers.forEach(function(p,i){
-    s+='<text class="tick" x="'+PX[i]+'" y="'+(MH-MB+20)+'" text-anchor="middle">'+N(p)+'</text>';
-  });
-  s+='<text class="atl" x="'+((ML+MW-MR)/2)+'" y="'+(MH-6)+'" text-anchor="middle">Мощность, Вт</text>';
-  D.combos.forEach(function(c){
-    var x=PX[D.powers.indexOf(c.power)], y=yOf(c.cap), r=7, both=c.vers.D&&c.vers.L;
-    var lab=c.title+(both?" — два варианта корпуса":(c.vers.D?" — тёмный корпус":" — светлый корпус на колёсах"));
-    s+='<g class="mk" data-id="'+c.id+'" tabindex="0" role="link" aria-label="'+esc(lab)+'" transform="translate('+x+' '+y+')">';
-    if(both) s+='<path class="d" d="M0 -'+r+'A'+r+' '+r+' 0 0 0 0 '+r+'Z"/><path class="l" d="M0 -'+r+'A'+r+' '+r+' 0 0 1 0 '+r+'Z"/>';
-    else s+='<circle class="'+(c.vers.D?"d":"l")+'" r="'+r+'"/>';
-    s+='<circle class="ring" r="'+r+'"/><circle r="8" fill="transparent"/></g>';
-  });
-  s+='</svg>';
-  mapEl.innerHTML=s;
-  mapEl.addEventListener("click",function(e){var g=e.target.closest(".mk"); if(g) goTo(g.dataset.id);});
-  mapEl.addEventListener("keydown",function(e){var g=e.target.closest&&e.target.closest(".mk"); if(g&&(e.key==="Enter"||e.key===" ")){e.preventDefault();goTo(g.dataset.id);}});
-  mapEl.addEventListener("mousemove",function(e){
-    var g=e.target.closest(".mk"); if(!g){tip.classList.remove("on");return;}
-    var c=BY[g.dataset.id]; tip.innerHTML="<b>"+esc(c.title)+"</b><br>"+(c.vers.D&&c.vers.L?"два варианта корпуса":(c.vers.D?"тёмный корпус":"светлый корпус на колёсах"));
-    tip.style.left=Math.min(window.innerWidth-250,e.clientX+14)+"px"; tip.style.top=(e.clientY+16)+"px"; tip.classList.add("on");
-  });
-  mapEl.addEventListener("mouseleave",function(){tip.classList.remove("on")});
-}
-function updateMap(list){
-  var S=selInfo(), ids={}; list.forEach(function(c){ids[c.id]=1});
-  mapEl.querySelectorAll(".mk").forEach(function(g){
-    var c=BY[g.dataset.id];
-    g.classList.toggle("dim",!ids[c.id]);
-    g.classList.toggle("no",S.any&&!fits(c,S));
-  });
-  document.getElementById("mapfit").textContent=S.any?"Красная обводка — мощности не хватит":"";
-  updateAcc(S,ids);
-}
-
-/* ---- карта на узком экране (≤760 px): «гармошка» по группам вместо графика ---- */
+/* ---- карта моделей: «гармошка» по группам ёмкости (одна открыта за раз) ---- */
 var accEl=document.getElementById("macc"), accBtns=[];
 function rangeText(a,b){
   if(a>=48) return dec(a/24,1)+"–"+dec(b/24,1)+" сут";
@@ -214,7 +173,7 @@ function buildAcc(){
       cs.filter(function(c){return c.cap===cap}).sort(function(a,b){return a.power-b.power}).forEach(function(c){
         var both=c.vers.D&&c.vers.L, body=both?"оба":(c.vers.D?"тёмный":"светлый"), p=minPrice(c);
         var b=document.createElement("button"); b.type="button"; b.className="ac-m"; b.dataset.id=c.id;
-        b.innerHTML='<b>'+N(c.power)+' Вт</b><span>'+body+'</span><span>'+(p?'от '+fmtPrice(p):SETTINGS.noPriceText.toLowerCase())+'</span><em hidden>не хватит мощности</em>';
+        b.innerHTML='<b>'+N(c.power)+' Вт</b><span>'+body+'</span><span>'+(p?'от '+fmtPrice(p):SETTINGS.noPriceText.toLowerCase())+'</span>'+(fr?'<span>холодильник '+hoursText(c.cap*EFF/la(fr))+'</span>':'')+'<em hidden>не хватит мощности</em>';
         b.addEventListener("click",function(){goTo(c.id)});
         btns.appendChild(b); accBtns.push(b);
       });
@@ -368,7 +327,7 @@ function render(){
   document.getElementById("pricenote").hidden=!list.some(function(c){return priceOf(c.vers[curVer(c)].code)>0});
   if(!rendered){ rendered=true; revealFirstCards(); }
   document.getElementById("count").textContent="Найдено: "+list.length+" из "+D.combos.length;
-  updateMap(list);
+  updateAcc(selInfo());
 }
 /* плавная смена главного фото: прежняя картинка лежит сверху и гаснет (только opacity) */
 function fadeFrom(ph,src){
@@ -506,5 +465,5 @@ document.getElementById("gl").innerHTML=D.glossary.map(function(g){return '<dt>'
   },{threshold:0.15}).observe(v);
 })();
 
-buildMap(); buildAcc(); render();
+buildAcc(); render();
 })();

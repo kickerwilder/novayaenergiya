@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>НОВАЯ ЭНЕРГИЯ: портативные электростанции, цены с доставкой</title>
-<meta name="description" content="Каталог портативных электростанций на литий-железо-фосфатных батареях: 29 комбинаций мощностью от 0,8 до 8 кВт и ёмкостью от 1,5 до 23 кВт·ч, два варианта корпуса. Цены с доставкой, подбор по приборам и расчёт времени работы.">
+<meta name="description" content="Каталог портативных электростанций на литий-железо-фосфатных батареях: 29 моделей мощностью от 0,8 до 8 кВт и ёмкостью от 1,5 до 23 кВт·ч, два варианта корпуса. Цены с доставкой, подбор по приборам и расчёт времени работы.">
 <!-- убрать при полном запуске: пока сайт закрыт от индексации поисковиками -->
 <meta name="robots" content="noindex">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="НОВАЯ ЭНЕРГИЯ">
 <meta property="og:title" content="НОВАЯ ЭНЕРГИЯ: портативные электростанции, цены с доставкой">
-<meta property="og:description" content="Каталог портативных электростанций на литий-железо-фосфатных батареях: 29 комбинаций мощностью от 0,8 до 8 кВт и ёмкостью от 1,5 до 23 кВт·ч, два варианта корпуса. Цены с доставкой, подбор по приборам и расчёт времени работы.">
+<meta property="og:description" content="Каталог портативных электростанций на литий-железо-фосфатных батареях: 29 моделей мощностью от 0,8 до 8 кВт и ёмкостью от 1,5 до 23 кВт·ч, два варианта корпуса. Цены с доставкой, подбор по приборам и расчёт времени работы.">
 <meta property="og:locale" content="ru_RU">
 <meta property="og:url" content="https://kickerwilder.github.io/novayaenergiya/">
 <meta property="og:image" content="https://kickerwilder.github.io/novayaenergiya/img/og.jpg">
@@ -55,7 +55,7 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
         <a class="btn" href="tel:+79787280002">Позвонить</a>
       </div>
       <ul class="facts reveal">
-        <li><b data-fact="combos">29</b>комбинаций мощности и ёмкости</li>
+        <li><b data-fact="combos">29</b>моделей мощности и ёмкости</li>
         <li><b data-fact="bodies">2</b>варианта корпуса</li>
         <li><b data-fact="cycles">2000+</b>циклов заряда</li>
       </ul>
@@ -73,6 +73,7 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
     <h2 id="kh2">Вариант корпуса</h2>
     <p class="lead">Выберите корпус, и каталог покажет только его. В шапке страницы и в карточках выбор одинаковый.</p>
     <div class="kinds" id="kinds" role="group" aria-label="Вариант корпуса"></div>
+    <p class="kinds-note" id="kindsNote"></p>
   </section>
 
   <section class="sec reveal" aria-labelledby="uh" id="uses">
@@ -87,7 +88,7 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
         <figcaption><b>Квартира</b><span>Роутер, ноутбук и свет при отключении света</span><small>Изображение иллюстративное</small></figcaption>
       </figure>
       <figure class="use">
-        <img src="img/scene-pair.jpg" alt="Иллюстрация: светлая станция на колёсах во дворе дома и тёмная станция в комнате, обе с подключёнными приборами" loading="lazy" width="1200" height="896">
+        <img src="img/scene-pair.jpg" alt="Две портативные электростанции у дачного дома, рядом палатка и костёр" loading="lazy" width="1200" height="896">
         <figcaption><b>Дача и отдых</b><span>Свет, холодильник, инструмент без розетки</span><small>Изображение иллюстративное</small></figcaption>
       </figure>
     </div>
@@ -95,12 +96,8 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
 
   <section class="sec reveal" aria-labelledby="mh">
     <h2 id="mh">Карта моделей</h2>
-    <p class="lead lead-map">Каждая точка — одна комбинация мощности и ёмкости. Чем правее — тем мощнее станция, чем выше — тем дольше она работает. Нажмите на точку, чтобы перейти к карточке.</p>
-    <p class="lead lead-acc">Выберите группу по ёмкости, затем мощность: откроется карточка модели.</p>
-    <div class="macc" id="macc"></div>
-    <div class="map"><div class="mapscroll"><div id="map"></div></div>
-      <div class="mapnote"><span><i class="k1"></i>только тёмный корпус</span><span><i class="k2"></i>только светлый на колёсах</span><span><i class="k3"></i>есть оба варианта</span><span id="mapfit"></span></div>
-    </div>
+    <p class="lead">Выберите группу по ёмкости, затем мощность: откроется карточка модели.</p>
+    <div class="macc" id="macc" role="group" aria-label="Карта моделей: группы по ёмкости, внутри кнопки мощностей"></div>
   </section>
 
   <section class="sec reveal" aria-labelledby="ph" id="picker">
@@ -176,7 +173,6 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
   <a class="btn primary" href="tel:+79787280002">Позвонить</a>
   <a class="btn" href="mailto:apv0050@gmail.com">Написать</a>
 </div>
-<div class="tip" id="tip" role="presentation"></div>
 
 <script src="assets/reveal.js"></script>
 <script src="data/catalog.js"></script>

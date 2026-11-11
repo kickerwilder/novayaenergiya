@@ -2,7 +2,10 @@
 """Обработка фото и видео владельца в img/. Исходники остаются в папке с фото и в репозиторий не попадают.
 
 Запуск из корня репозитория:
-    python scripts/process_media.py [папка_с_исходниками]      (по умолчанию ..\\photos рядом с репозиторием)
+    python scripts/process_media.py [папка_с_исходниками] [--only файл ...]
+        папка по умолчанию: ..\\photos рядом с репозиторием;
+        --only: обработать только указанные файлы (имя исходника или результата, например scene-pair.jpg);
+        og.jpg (из scene-pair.jpg) пересобирается только если он назван в --only или режим --only не задан.
 
 Нужны Pillow (pip install Pillow) и, для видео, ffmpeg. Скрипт ищет ffmpeg в PATH, затем в пакете
 imageio-ffmpeg (pip install imageio-ffmpeg, лучше во временное окружение вне репозитория). Если ffmpeg
@@ -33,9 +36,9 @@ PHOTOS = [
     ("black-station.jpg", "photo-black.jpg", 1200, 82, 200),
     ("black-cabinet.jpg", "photo-cabinet.jpg", 1200, 82, 200),
     ("white-station.jpg", "photo-white.jpg", 1200, 82, 200),
-    ("scene-house.jpg", "scene-house.jpg", 1200, 82, 250),
-    ("scene-room.jpg", "scene-room.jpg", 1200, 82, 250),
-    ("scene-pair.jpg", "scene-pair.jpg", 1200, 82, 250),
+    ("scene-house.jpg", "scene-house.jpg", 1200, 82, 150),
+    ("scene-room.jpg", "scene-room.jpg", 1200, 82, 150),
+    ("scene-pair.jpg", "scene-pair.jpg", 1200, 82, 150),
     ("diagram-black-box.jpg", "diagram-black-box.jpg", 900, 85, None),
     ("diagram-black-cabinet.jpg", "diagram-black-cabinet.jpg", 900, 85, None),
     ("diagram-white-4.jpg", "diagram-white-4.jpg", 900, 85, None),
@@ -123,27 +126,39 @@ def process_video(src):
 
 
 def main():
-    src_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT.parent / "photos"
+    args = sys.argv[1:]
+    only = None
+    if "--only" in args:
+        i = args.index("--only")
+        only = set(args[i + 1 :])
+        args = args[:i]
+        if not only:
+            sys.exit("После --only укажите имена файлов")
+    src_dir = Path(args[0]) if args else ROOT.parent / "photos"
     if not src_dir.is_dir():
         sys.exit("Нет папки с исходниками: %s" % src_dir)
     IMG.mkdir(exist_ok=True)
     missing = []
     for src_name, dst_name, width, q, limit in PHOTOS:
+        if only is not None and src_name not in only and dst_name not in only:
+            continue
         src = src_dir / src_name
         if not src.is_file():
-            missing.append(src_name)
+            missing.append(str(src))
             continue
         im = process_photo(src, dst_name, width, q, limit)
-        if src_name == "scene-pair.jpg":  # картинка для ссылок в мессенджерах: 1200x630, обрезка по центру
+        if src_name == "scene-pair.jpg" and (only is None or "og.jpg" in only):  # картинка для ссылок в мессенджерах: 1200x630, обрезка по центру
             top = max(0, (im.height - 630) // 2)
             og = im.crop((0, top, 1200, top + 630)) if im.width == 1200 else im.resize((1200, 630), Image.LANCZOS)
             save_jpeg(og, IMG / "og.jpg", 85, None)
             report.append("%-26s %4dx%-4d %7.0f КБ  q=85 (из scene-pair, обрезка по центру)" % ("og.jpg", 1200, 630, kb(IMG / "og.jpg")))
     video = src_dir / "hero.mp4"
-    if video.is_file():
+    if only is not None and "hero.mp4" not in only and "hero-poster.jpg" not in only:
+        pass
+    elif video.is_file():
         process_video(video)
     else:
-        missing.append("hero.mp4")
+        missing.append(str(video))
     print("\n".join(report))
     if missing:
         print("\nНЕ НАЙДЕНЫ исходники (прежние файлы оставлены): " + ", ".join(missing))
