@@ -47,7 +47,7 @@ function respond(obj, status, origin, extra) {
 }
 const say = (reply, o) => Object.assign({ reply, cards: [], handoff: false }, o || {});
 
-/* ---------- системная инструкция: prompt.md + данные из базы знаний (правила, НЕ ПОДТВЕРЖДЕНО, FAQ, контакты, приборы) ---------- */
+/* ---------- системная инструкция: prompt.md + данные из базы знаний (правила, список «уточняется», FAQ, контакты, приборы) ---------- */
 let promptText = null;
 function readPrompt(env) {
   if (promptText) return promptText;
@@ -60,7 +60,7 @@ function buildSystem(kb, env) {
   if (systemCache.has(kb)) return systemCache.get(kb);
   const s = readPrompt(env) +
     "\n## Правила\n" + kb.rules.map((r) => "- " + r).join("\n") +
-    "\n\n## НЕ ПОДТВЕРЖДЕНО (цифр не называть, отвечать «уточним у менеджера» и давать контакты)\n" + kb.unconfirmed.map((r) => "- " + r).join("\n") +
+    "\n\n## УТОЧНЯЕТСЯ (цифр не называть, отвечать «уточним у менеджера» и давать контакты)\n" + kb.clarify.map((r) => "- " + r).join("\n") +
     "\n\n## Частые вопросы (ответы можно пересказывать)\n" + kb.faq.map((f) => "Вопрос: " + f.q + "\nОтвет: " + f.a).join("\n\n") +
     "\n\n## Контакты\nТелефон " + kb.contacts.phone + ", почта " + kb.contacts.email + ".\n" +
     "\n## Приборы в списке (id — название; мощности смотри в list_loads)\n" + kb.loads.map((l) => l.id + " — " + l.name).join("\n") + "\n";

@@ -70,7 +70,7 @@ def main():
     st_by = {s["code"]: s for s in kb["stations"]}
     ld_by = {l["id"]: l for l in kb["loads"]}
     static_nums = set()
-    for txt in kb["rules"] + kb["unconfirmed"] + [f["q"] + " " + f["a"] for f in kb["faq"]] + [kb["contacts"]["phone"], kb["contacts"]["email"]]:
+    for txt in kb["rules"] + kb["clarify"] + [f["q"] + " " + f["a"] for f in kb["faq"]] + [kb["contacts"]["phone"], kb["contacts"]["email"]]:
         static_nums |= nums(txt)
     cases = json.loads(Path(a.cases).read_text(encoding="utf-8"))
     if a.only:

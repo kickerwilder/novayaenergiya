@@ -43,4 +43,6 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({ error: "internal" }));
   }
 });
-server.listen(PORT, () => console.log("bot listening on :" + PORT + " model=" + (process.env.MODEL || "gemini-3.5-flash-lite")));
+const HOST = process.env.HOST || ""; /* HOST=127.0.0.1 — слушать только этот компьютер (локальная разработка) */
+const onListen = () => console.log("bot listening on " + (HOST || "0.0.0.0") + ":" + PORT + " model=" + (process.env.MODEL || "gemini-3.5-flash-lite"));
+if (HOST) server.listen(PORT, HOST, onListen); else server.listen(PORT, onListen);
