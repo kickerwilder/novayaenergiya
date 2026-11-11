@@ -3,3 +3,10 @@
 prices.csv
 __pycache__/
 *.pyc
+
+# локальные секреты и зависимости бота
+bot/.env
+bot/.env.*
+bot/node_modules/
+assets/chat-config.local.js
+bot/dist/

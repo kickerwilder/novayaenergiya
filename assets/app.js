@@ -9,20 +9,18 @@ const SETTINGS = {
   contactHref: "tel:+79787280002" // основной контакт; например "https://t.me/ваш_ник"; пусто = кнопка скрыта
 };
 
+/* Адрес бэкенда чата-консультанта (например "https://bot.example.ru"). Пусто: чат не показывается, сайт работает без бэкенда.
+   Для локальной проверки без правки файла: открыть страницу с ?chat=local (порт 8787) или ?chat=local:ПОРТ. */
+const CHAT_URL = "";
+
 (function(){
 "use strict";
 var D=DATA, EFF=D.eff, PH=D.phone_wh;
 var nf=new Intl.NumberFormat("ru-RU");
 var reduceMotion=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)");
-function N(x){return x==null?"—":nf.format(x)}
-function dec(x,d){return String(Math.round(x*Math.pow(10,d))/Math.pow(10,d)).replace(".",",")}
+var C=NECalc; /* расчёты вынесены в assets/calc.js (общий модуль сайта и бота) */
+var N=C.N, dec=C.dec, hoursText=C.hoursText;
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
-function hoursText(h){
-  if(h<1) return "≈ "+Math.round(h*60)+" мин";
-  if(h<10) return "≈ "+dec(h,1)+" ч";
-  if(h<48) return "≈ "+Math.round(h)+" ч";
-  return "≈ "+dec(h/24,1)+" сут";
-}
 function kwh(w){return dec(w/1000,1)}
 var state={ver:"all",group:null,power:null,purpose:null,q:"",sort:"cap-asc",sel:{},only:true,cv:{}};
 var BY={}; D.combos.forEach(function(c){BY[c.id]=c});
@@ -32,29 +30,14 @@ function curVer(c){
   if(state.ver!=="all"&&c.vers[state.ver]) return state.ver;
   return c.vers.D?"D":"L";
 }
-/* Нагрузка прибора: watts — мощность при работе (подбор и проверка станции), avg — в среднем (для часов, по умолчанию = watts),
-   start — пусковая, Вт (по умолчанию нет). У смартфона watts = null: в сумме считается как 20 Вт. */
-function lw(l){return l.watts==null?20:l.watts}
-function la(l){return l.avg==null?lw(l):l.avg}
-function peakOf(c){return 2*c.power} /* пик станции: 2 × номинала, до 0,3 с, по паспорту изделия */
-function selInfo(){
-  var s={t:0,avg:0,start:0,any:false};
-  D.loads.forEach(function(l){ if(state.sel[l.key]){s.any=true; s.t+=lw(l); s.avg+=la(l); if(l.start&&l.start>s.start) s.start=l.start;} });
-  return s;
-}
-/* станция подходит: power >= сумма watts и peak >= максимальная пусковая среди выбранных */
-function fits(c,S){return !S.any||(c.power>=S.t&&peakOf(c)>=S.start)}
-function runtimeFor(c){
-  return D.loads.map(function(l){
-    if(l.watts==null) return {l:l,ok:true,text:"≈ "+N(Math.floor(c.cap*EFF/PH))+" раз"};
-    if(c.power<l.watts||(l.start&&peakOf(c)<l.start)) return {l:l,ok:false,text:"не потянет"};
-    return {l:l,ok:true,h:c.cap*EFF/la(l),text:hoursText(c.cap*EFF/la(l))};
-  });
-}
+/* подбор по приборам и время работы: assets/calc.js */
+var lw=C.loadWatts, la=C.loadAvg, peakOf=C.peakOf, fits=C.fits;
+function selInfo(){return C.selection(D.loads,state.sel)}
+function runtimeFor(c){return C.runtimeFor(c,D.loads,EFF,PH)}
 
 /* ---- версии (шапка): «Все» / «Тёмный» / «Светлый на колёсах» ---- */
 var kindsEl=document.getElementById("kinds"), hkEl=document.getElementById("hkinds");
-function plural(n,f){var a=n%10,b=n%100; return f[(b>10&&b<20)?2:(a===1?0:(a>=2&&a<=4?1:2))]}
+var plural=C.plural;
 var KINDS=[
   {key:"all",title:"Все",act:"Показать все варианты"},
   {key:"D",title:"Тёмный корпус",act:"Показать только тёмные"},
@@ -142,10 +125,7 @@ function renderFilters(){
 /* ---- карта ---- */
 /* ---- карта моделей: «гармошка» по группам ёмкости (одна открыта за раз) ---- */
 var accEl=document.getElementById("macc"), accBtns=[];
-function rangeText(a,b){
-  if(a>=48) return dec(a/24,1)+"–"+dec(b/24,1)+" сут";
-  return Math.round(a)+"–"+Math.round(b)+" ч";
-}
+var rangeText=C.rangeText;
 function minPrice(c){
   var m=0; Object.keys(c.vers).forEach(function(k){var p=priceOf(c.vers[k].code); if(p&&(!m||p<m)) m=p;}); return m;
 }
@@ -195,6 +175,17 @@ function updateAcc(S){
     b.classList.toggle("no",bad); b.querySelector("em").hidden=!bad;
   });
 }
+/* переход к карточке по коду версии (Z2800-3800-L): нужная версия корпуса включается, карточка подсвечивается */
+function goToCode(code){
+  var id=String(code).replace(/-[DL]$/,""), ver=String(code).slice(-1);
+  if(!BY[id]) return;
+  goTo(id);
+  var b=document.querySelector('#card-'+id+' .vbtn[data-v="'+ver+'"]');
+  if(b&&b.getAttribute("aria-pressed")!=="true"){
+    b.click();
+    var el=document.getElementById("card-"+id); if(el){el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");}
+  }
+}
 function goTo(id){
   state.group=state.power=state.purpose=null; state.q=""; document.getElementById("q").value="";
   if(state.ver!=="all"&&!BY[id].vers[state.ver]) state.ver="all";
@@ -217,11 +208,10 @@ function priceHtml(code){
 }
 /* зарядка: t80 = 0,8·E/(P·0,9); t100 = E/(P·0,9)·1,2; округление до 0,1 ч */
 function chargeHtml(V,c){
-  var ch=(typeof CHARGE!=="undefined")&&CHARGE[V.code], li=[];
-  var r1=function(x){return dec(Math.round(x*10)/10,1)};
-  if(ch&&ch.acW){
-    var est=ch.basis==="estimate", p=ch.acW*0.9, a=c.cap;
-    li.push('От розетки 220 В (комплектное зарядное): 0–80 % за '+(est?'≈ ':'')+r1(0.8*a/p)+' ч, 0–100 % за '+(est?'≈ ':'')+r1(a/p*1.2)+' ч'+(est?' (ориентировочно)':''));
+  var ct=C.chargeTimes(c.cap,(typeof CHARGE!=="undefined")&&CHARGE[V.code]), li=[];
+  if(ct){
+    var est=ct.estimate;
+    li.push('От розетки 220 В (комплектное зарядное): 0–80 % за '+(est?'≈ ':'')+dec(ct.t80,1)+' ч, 0–100 % за '+(est?'≈ ':'')+dec(ct.t100,1)+' ч'+(est?' (ориентировочно)':''));
   }else li.push('Время зарядки уточняется');
   var hasAnd=V.conn.some(function(x){return /Anderson/i.test(x)});
   li.push('Через разъёмы XT90 (до 30 А)'+(hasAnd?' и Anderson (до 50 А)':'')+'; солнечные панели — только через внешний MPPT-контроллер');
@@ -268,7 +258,7 @@ function cardHtml(c,S,open){
   var rows=V.rows.map(function(r){return '<tr><th>'+esc(r[0])+'</th><td>'+esc(r[1])+'</td></tr>'}).join("");
   var rtt='<h5>На что хватает (расчётная оценка)</h5><table>'+rt.map(function(r){
     var w=r.l.watts?' ('+N(r.l.watts)+' Вт'+(r.l.avg&&r.l.avg!==r.l.watts?', в среднем '+N(r.l.avg)+' Вт':'')+')':'';
-    var low=r.ok&&r.l.watts!=null&&la(r.l)<=100, tx=low?r.text.replace("≈ ","до ").replace(" сут"," суток")+" *":r.text;
+    var tx=C.tableText(r);
     return '<tr><th>'+esc(r.l.name+w)+'</th><td'+(r.ok?'':' class="no"')+'>'+esc(tx)+'</td></tr>'}).join("")+'</table>'+
     '<p class="fn">Время расчётное. Не учитывает собственное потребление станции при включённом инверторе (по паспорту изделия до 50 Вт): у приборов до 100 Вт фактическое время может быть меньше. Мелкие устройства лучше заряжать через USB.</p>';
   var saf=D.safety&&D.safety.length?'<h5>Безопасность</h5><ul class="warn">'+D.safety.map(function(u){return '<li>'+esc(u)+'</li>'}).join("")+'</ul>':'';
@@ -468,6 +458,31 @@ document.getElementById("gl").innerHTML=D.glossary.map(function(g){return '<dt>'
       else v.pause();
     });
   },{threshold:0.15}).observe(v);
+})();
+
+/* чат-консультант: кнопка создаётся сразу, сам виджет (assets/chat.js) подгружается лениво: на простое страницы или по нажатию */
+(function(){
+  var url=CHAT_URL, m=/[?&]chat=local(?::(\d+))?(?:&|$)/.exec(location.search);
+  if(m) url="http://localhost:"+(m[1]||"8787");
+  if(!url) return;
+  document.body.classList.add("has-chat");
+  var btn=document.createElement("button");
+  btn.type="button"; btn.className="chat-fab"; btn.id="chatFab"; btn.setAttribute("aria-haspopup","dialog"); btn.setAttribute("aria-expanded","false"); btn.setAttribute("aria-controls","chatPanel");
+  btn.innerHTML='<svg class="chat-fab-ic" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="currentColor"/></svg><span>Подобрать станцию в чате</span>';
+  document.body.appendChild(btn);
+  var waiting=null;
+  function load(cb){
+    if(window.NEchat){cb(); return;}
+    if(waiting){waiting.push(cb); return;}
+    waiting=[cb];
+    var sc=document.createElement("script"); sc.src="assets/chat.js";
+    sc.onload=function(){ window.NEchat.init({url:url,button:btn,goToCode:goToCode,fmtPrice:fmtPrice}); var q=waiting; waiting=null; q.forEach(function(f){f()}); };
+    sc.onerror=function(){ waiting=null; btn.hidden=true; };
+    document.head.appendChild(sc);
+  }
+  btn.addEventListener("click",function(){ load(function(){window.NEchat.toggle()}); });
+  if("requestIdleCallback" in window) requestIdleCallback(function(){load(function(){})},{timeout:8000});
+  else setTimeout(function(){load(function(){})},5000);
 })();
 
 buildAcc(); render();
