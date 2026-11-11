@@ -16,6 +16,8 @@
       import_prices.py  загрузка цен из CSV или таблицы владельца (XLSX) в data/prices.js
       split.py          одноразовый скрипт, которым index.html был разнесён по файлам
       update_data_v2.py скрипт обновления data/catalog.js (ресурс, пик, розетки, приборы); повторный запуск безопасен
+      build_seo.py      SEO-разметка, JSON-LD, блок «Частые вопросы», robots.txt и sitemap.xml
+      faq.json          вопросы и ответы для блока «Частые вопросы» и FAQPage
       process_media.py  обработка фото и видео владельца в img/ (нужны Pillow и ffmpeg)
       update_media.py   привязка фото и схем к data/catalog.js (запускать после process_media.py)
 
@@ -126,9 +128,21 @@
 
 Пока данных нет, держите места пустыми, а не пишите догадки: на публикуемой версии не должно быть текста-заглушек. Проверка перед публикацией: `grep -rn "TODO_" index.html assets data` должен быть пустым.
 
-## Закрытие от индексации и запуск
+## SEO, частые вопросы и запуск на своём домене
 
-Пока сайт не запущен полностью, в `<head>` стоит `<meta name="robots" content="noindex">` с комментарием «убрать при полном запуске». Поисковики такую страницу не индексируют. **При полном запуске удалите эту строку вместе с комментарием.** Там же заданы заголовок, описание и Open Graph для красивой ссылки в мессенджерах (`og:url` и `og:image` указывают на `https://kickerwilder.github.io/novayaenergiya/`: при смене адреса сайта поменяйте их), иконка сайта лежит в `assets/favicon.svg`.
+Всё, что связано с поисковиками, собирает один скрипт: `python scripts/build_seo.py` (без внешних зависимостей, повторный запуск ничего не меняет, если данные те же).
+
+- Адрес сайта задан **в одном месте**: константа `SITE_URL` в `scripts/build_seo.py`. От неё строятся canonical, `og:url`, `og:image`, `twitter:image`, адреса в JSON-LD, `robots.txt` и `sitemap.xml`.
+- В `index.html` скрипт заполняет два блока между маркерами: `<!-- SEO:BEGIN -->…<!-- SEO:END -->` в `<head>` (title, description, canonical, Open Graph, Twitter, theme-color, JSON-LD: Organization, WebSite, BreadcrumbList, Product на каждую модель с ценой и FAQPage) и `<!-- FAQ:BEGIN -->…<!-- FAQ:END -->` (видимый блок «Частые вопросы»). Руками между маркерами ничего не правьте.
+- Тексты вопросов и ответов лежат в `scripts/faq.json`. Если у модели все версии «по запросу» (цена 0), её `Product` выводится без `offers`.
+- **После любого обновления цен или каталога запускайте `python scripts/build_seo.py`.** Порядок: `import_prices.py` (или `update_*.py`), затем `build_seo.py`.
+- `robots.txt` намеренно без `Disallow`: сайт закрыт от индексации тегом `<meta name="robots" content="noindex,nofollow">` в `<head>` (рядом комментарий «убрать при запуске на своём домене»), а запрет обхода помешал бы поисковику этот тег прочитать.
+
+**При переезде на свой домен:**
+1. Поменять `SITE_URL` в `scripts/build_seo.py` и запустить `python scripts/build_seo.py`.
+2. Убрать из `index.html` строку `<meta name="robots" content="noindex,nofollow">` и комментарий к ней.
+3. Добавить `CNAME` и DNS-записи (см. ниже), включить HTTPS.
+4. Добавить сайт в Яндекс Вебмастер и Google Search Console, отправить `sitemap.xml`.
 
 ## Анимации при прокрутке
 

@@ -252,12 +252,15 @@ details[open]>summary::before{content:"–"}
   .bar-c{display:none}
   .bar-in{gap:0 10px;min-height:56px}
   .nav{margin-left:auto}
-  .nav a{padding:0 7px;font-size:13.5px}
+  .nav a{padding:0 5px;font-size:13px}
   .brand{font-size:15px}
   .dock{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:30;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--line);box-shadow:0 -6px 18px rgba(27,33,39,.12)}
   .dock .btn{min-height:48px}
   body{padding-bottom:calc(66px + env(safe-area-inset-bottom))}
   .sec,.card{scroll-margin-top:66px}
+}
+@media (max-width:420px){
+  .nav a[href="#picker"]{display:none} /* на узких телефонах «Подобрать станцию» есть в hero; иначе шапка шире экрана */
 }
 @media (max-width:660px){
   .wrap{padding:0 14px}
@@ -288,6 +291,17 @@ details[open]>summary::before{content:"–"}
 }
 .toast{position:fixed;left:50%;bottom:24px;z-index:30;max-width:calc(100vw - 32px);padding:12px 18px;border-radius:8px;background:var(--ink);color:#fff;font:600 14.5px/1.35 var(--body);text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.25);opacity:0;transform:translate(-50%,12px);pointer-events:none;transition:opacity .25s ease,transform .25s ease}
 .toast.on{opacity:1;transform:translate(-50%,0)}
+/* частые вопросы */
+.faq{display:grid;gap:8px;max-width:900px}
+.faq details{background:var(--panel);border:1.5px solid var(--line);border-radius:8px}
+.faq details[open]{border-color:#b9c1c8}
+.faq summary{display:flex;align-items:center;min-height:48px;padding:10px 16px;font:600 15.5px/1.35 var(--head);color:var(--ink)}
+.faq summary::before{color:var(--accent-ink);flex:none}
+.faq summary:hover{color:var(--accent-ink)}
+.faq details>p{margin:0;padding:0 16px 16px 34px;font-size:15px;line-height:1.55;color:#27323b;max-width:72ch}
+.faq details>p a{color:var(--accent-ink);font-weight:600}
+/* выравнивание фона тёмной станции (серо-голубой) с белым фоном светлой в плашках: подтягиваем светлые тона к белому */
+.kpic img[src$="photo-black.jpg"],.hpic img[src$="photo-black.jpg"]{filter:brightness(1.04)}
 /* блок «Где пригодится» */
 .uses{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
 .use{margin:0;background:var(--panel);border:1.5px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}

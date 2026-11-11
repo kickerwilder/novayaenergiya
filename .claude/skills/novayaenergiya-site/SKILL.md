@@ -80,12 +80,16 @@ description: "Работа с сайтом-каталогом портативн
 - Существующий `SETTINGS.contactHref` должен указывать на актуальный основной контакт, чтобы кнопки карточек не расходились с остальными контактами.
 
 ### 5.6 SEO и метаданные
-- `title`, `description`, `canonical`, Open Graph, favicon, `lang="ru"`.
-- JSON-LD `Organization` (из контактов и реквизитов) и `Product` с `Offer` (`priceCurrency: "RUB"`) только для версий с ценой больше нуля.
-- `robots.txt` и `sitemap.xml` после того, как известен домен.
+- Всё генерирует `scripts/build_seo.py` (без зависимостей, идемпотентный): блоки `<!-- SEO:BEGIN/END -->` в `<head>` (title ≤ 60, description ≤ 160, canonical, Open Graph, Twitter, theme-color, JSON-LD) и `<!-- FAQ:BEGIN/END -->` (видимые «Частые вопросы» из `scripts/faq.json`), а также `robots.txt` и `sitemap.xml`. Между маркерами руками не править.
+- Адрес сайта: константа `SITE_URL` в `build_seo.py`, единственное место.
+- JSON-LD: `Organization`, `WebSite`, `BreadcrumbList`, `Product` на каждую комбинацию (с `AggregateOffer` только при цене > 0; цена 0 в разметку не попадает), `FAQPage`. Без `aggregateRating` и отзывов.
+- **После любого обновления цен или каталога запускать `python scripts/build_seo.py`.**
+- Сейчас сайт закрыт: `<meta name="robots" content="noindex,nofollow">` в `<head>` (комментарий «убрать при запуске на своём домене»). `robots.txt` без `Disallow` намеренно.
+- Тексты FAQ дословно от владельца; если факт в ответе расходится с `DATA` или текстом сайта, не выдумывай: остановись и опиши расхождение в отчёте. Репозиторий публичный: ни в текстах, ни в коде не называть источник характеристик иначе, чем «по паспорту изделия»; никакой маржи, наценок и себестоимости.
 
 ### 5.7 Публикация
 - GitHub Pages: Settings → Pages → Deploy from a branch → `main` → `/ (root)`. Пользовательский домен: файл `CNAME` и DNS-записи владельца. Саму публикацию и покупку домена делает владелец; агент готовит ветку, pull request и пошаговую инструкцию.
+- **При переезде на домен:** поменять `SITE_URL` в `scripts/build_seo.py`, запустить `python scripts/build_seo.py`, убрать `noindex,nofollow` из `index.html`, добавить сайт в Яндекс Вебмастер и Google Search Console, отправить `sitemap.xml`.
 
 ## 6. Проверка перед сдачей
 

@@ -228,6 +228,11 @@ function chargeHtml(V,c){
   li.push('Зарядка возможна при температуре воздуха 0…+45 °C');
   return li;
 }
+/* alt фото версии корпуса: по файлу фото различаем «ящик» и «шкаф» */
+function bodyAlt(V,v){
+  if(v==="L") return "Светлая портативная электростанция на колёсах с выдвижной ручкой";
+  return V.img.indexOf("cabinet")>-1?"Тёмная портативная электростанция в корпусе-шкафу на колёсиках с четырьмя розетками":"Тёмная портативная электростанция с четырьмя розетками на лицевой панели";
+}
 function cardHtml(c,S,open){
   open=open||{};
   var t=S.t, v=curVer(c), V=c.vers[v], rt=runtimeFor(c), ok=fits(c,S), ms=V.maxSocket;
@@ -263,7 +268,7 @@ function cardHtml(c,S,open){
   var rows=V.rows.map(function(r){return '<tr><th>'+esc(r[0])+'</th><td>'+esc(r[1])+'</td></tr>'}).join("");
   var rtt='<h5>На что хватает (расчётная оценка)</h5><table>'+rt.map(function(r){
     var w=r.l.watts?' ('+N(r.l.watts)+' Вт'+(r.l.avg&&r.l.avg!==r.l.watts?', в среднем '+N(r.l.avg)+' Вт':'')+')':'';
-    var low=r.ok&&r.l.watts!=null&&la(r.l)<=100, tx=low?r.text.replace("≈ ","до ")+" *":r.text;
+    var low=r.ok&&r.l.watts!=null&&la(r.l)<=100, tx=low?r.text.replace("≈ ","до ").replace(" сут"," суток")+" *":r.text;
     return '<tr><th>'+esc(r.l.name+w)+'</th><td'+(r.ok?'':' class="no"')+'>'+esc(tx)+'</td></tr>'}).join("")+'</table>'+
     '<p class="fn">Время расчётное. Не учитывает собственное потребление станции при включённом инверторе (по паспорту изделия до 50 Вт): у приборов до 100 Вт фактическое время может быть меньше. Мелкие устройства лучше заряжать через USB.</p>';
   var saf=D.safety&&D.safety.length?'<h5>Безопасность</h5><ul class="warn">'+D.safety.map(function(u){return '<li>'+esc(u)+'</li>'}).join("")+'</ul>':'';
@@ -274,7 +279,7 @@ function cardHtml(c,S,open){
   var lim=V.limits&&V.limits.length?'<h5>Ограничения</h5><ul class="warn">'+V.limits.map(function(u){return '<li>'+esc(u)+'</li>'}).join("")+'</ul>':'';
   return '<li class="card'+(ok?'':' off')+'" id="card-'+c.id+'" data-id="'+c.id+'">'+
    '<div class="main">'+
-     '<div class="pic"><div class="ph"><img src="'+V.img+'" alt="'+esc(D.versions[v].name+': '+c.title)+'" loading="lazy" width="1200" height="896"></div>'+seg+'</div>'+
+     '<div class="pic"><div class="ph"><img src="'+V.img+'" alt="'+esc(bodyAlt(V,v)+': '+c.title)+'" loading="lazy" width="1200" height="896"></div>'+seg+'</div>'+
      '<div class="info"><p class="grp">'+esc(c.group)+' · '+esc(V.design)+'</p>'+
        '<div class="hd"><h3>'+esc(c.title)+'</h3><span class="code">'+V.code+'</span></div>'+sp+l2+
        '<div class="tags">'+tags+'</div></div>'+
