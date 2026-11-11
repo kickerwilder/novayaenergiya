@@ -33,7 +33,7 @@ button,select,input{font:inherit;color:inherit}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .wrap{max-width:1200px;margin:0 auto;padding:0 20px}
 h1,h2,h3,h4,h5{font-family:var(--head)}
-.sec{margin:44px 0 0;scroll-margin-top:72px}
+.sec{margin:44px 0 0;scroll-margin-top:100px} /* шапка 61 px + 8 px запаса + 16 px: у блоков .reveal при прокрутке ещё есть сдвиг translateY(16px) */
 .sec>h2{margin:0 0 6px;font:700 clamp(21px,3vw,28px)/1.2 var(--head);letter-spacing:-.01em}
 .sec>p.lead{margin:0 0 18px;color:var(--muted);max-width:68ch}
 
@@ -257,7 +257,7 @@ details[open]>summary::before{content:"–"}
   .dock{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:30;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--line);box-shadow:0 -6px 18px rgba(27,33,39,.12)}
   .dock .btn{min-height:48px}
   body{padding-bottom:calc(66px + env(safe-area-inset-bottom))}
-  .sec,.card{scroll-margin-top:66px}
+  .sec,.card{scroll-margin-top:92px} /* шапка 57 px + 8 + 16 (сдвиг .reveal) */
 }
 @media (max-width:420px){
   .nav a[href="#picker"]{display:none} /* на узких телефонах «Подобрать станцию» есть в hero; иначе шапка шире экрана */
