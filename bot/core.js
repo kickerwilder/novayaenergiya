@@ -10,7 +10,9 @@ const { generate, ProviderError } = require("./provider.js");
 
 const PHONE = "+7 978 728-00-02", EMAIL = "apv0050@gmail.com";
 const HANDOFF_TEXT = "Сейчас не могу ответить, позвоните " + PHONE + " или напишите на " + EMAIL;
-const LIMITS = { bodyBytes: 8192, messages: 20, chars: 500, toolIterations: 4 };
+/* chars — только для НОВОГО сообщения клиента; ответы ассистента в истории молча обрезаются до assistantChars;
+   в модель уходят последние historyMessages сообщений */
+const LIMITS = { bodyBytes: 16384, historyMessages: 12, chars: 500, assistantChars: 800, toolIterations: 4 };
 
 /* ---------- лимиты запросов (в памяти процесса; при перезапуске обнуляются) ---------- */
 const perClient = new Map();
@@ -114,16 +116,24 @@ async function chat(request, env, origin) {
   try { body = JSON.parse(raw); } catch (_) { return respond(say("Не удалось прочитать сообщение."), 400, origin); }
   let msgs = body && body.messages;
   if (!Array.isArray(msgs) || !msgs.length) return respond(say("Напишите, пожалуйста, ваш вопрос."), 400, origin);
-  if (msgs.length > LIMITS.messages) return respond(say("Диалог получился слишком длинным. Начните новый или позвоните " + PHONE + "."), 400, origin);
-  const clean_ = [];
+  /* форма сообщений */
   for (const m of msgs) {
     if (!m || (m.role !== "user" && m.role !== "assistant") || typeof m.text !== "string") return respond(say("Не удалось прочитать сообщение."), 400, origin);
-    const text = m.text.trim();
-    if (text.length > LIMITS.chars) return respond(say("Сообщение длиннее " + LIMITS.chars + " символов. Сократите его, пожалуйста."), 400, origin);
+  }
+  /* новое сообщение клиента — последнее; лимит символов относится только к нему */
+  const newest = msgs[msgs.length - 1];
+  if (newest.role !== "user" || !newest.text.trim()) return respond(say("Напишите, пожалуйста, ваш вопрос."), 200, origin);
+  if (newest.text.trim().length > LIMITS.chars) return respond(say("Сообщение длиннее " + LIMITS.chars + " символов. Сократите его, пожалуйста."), 400, origin);
+  /* история: сообщения клиента до 500 символов, ответы ассистента до 800 (молча обрезаются, ошибки нет) */
+  const clean_ = [];
+  for (const m of msgs) {
+    const text = m.text.trim().slice(0, m.role === "assistant" ? LIMITS.assistantChars : LIMITS.chars);
     if (!text) continue;
     const last = clean_[clean_.length - 1];
     if (last && last.role === m.role) last.text += "\n" + text; else clean_.push({ role: m.role, text });
   }
+  /* слишком длинная история: старые сообщения отбрасываются, ошибки нет */
+  if (clean_.length > LIMITS.historyMessages) clean_.splice(0, clean_.length - LIMITS.historyMessages);
   while (clean_.length && clean_[0].role !== "user") clean_.shift();
   if (!clean_.length || clean_[clean_.length - 1].role !== "user") return respond(say("Напишите, пожалуйста, ваш вопрос."), 200, origin);
 
@@ -160,7 +170,7 @@ async function chat(request, env, origin) {
     return respond(out, 200, origin);
   } catch (e) {
     /* сырые ошибки провайдера и сервера клиенту не отдаются; в лог — только вид сбоя без текста ответа */
-    console.error("chat_error: " + (e instanceof ProviderError ? e.kind + (e.status ? " " + e.status : "") : "internal"));
+    console.error("chat_error: " + (e instanceof ProviderError ? e.kind + (e.status ? " " + e.status : "") : "internal " + (e && e.name) + ": " + String(e && e.message).slice(0, 160)));
     return respond(say(HANDOFF_TEXT, { handoff: true }), 200, origin);
   }
 }

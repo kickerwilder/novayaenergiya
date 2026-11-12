@@ -27,9 +27,14 @@ const trustProxy = String(process.env.TRUST_PROXY) === "1"; /* за nginx/бал
 const server = http.createServer(async (req, res) => {
   try {
     const chunks = []; let size = 0, tooBig = false;
-    for await (const c of req) { size += c.length; if (size > 16384) { tooBig = true; break; } chunks.push(c); }
+    for await (const c of req) {
+      size += c.length;
+      if (size > 1048576) break;                    /* совсем огромное тело: прекращаем читать */
+      if (size > 16384) { tooBig = true; continue; } /* лимит ядра: 16 КБ; остаток дочитываем и отбрасываем */
+      chunks.push(c);
+    }
     const headers = new Headers();
-    for (const [k, v] of Object.entries(req.headers)) if (k !== "x-client-ip" && v !== undefined) headers.set(k, Array.isArray(v) ? v.join(", ") : v);
+    for (const [k, v] of Object.entries(req.headers)) if (k !== "x-client-ip" && k !== "content-length" && k !== "transfer-encoding" && v !== undefined) headers.set(k, Array.isArray(v) ? v.join(", ") : v);
     const fwd = trustProxy ? String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() : "";
     headers.set("x-client-ip", fwd || req.socket.remoteAddress || "unknown");
     const method = req.method || "GET";

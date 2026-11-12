@@ -8,8 +8,12 @@
 Запуск:  python scripts/test_bot.py --main http://localhost:38701 --bad http://localhost:38702 \\
                                     --zero http://localhost:38703 --rate http://localhost:38704 [--only id] [--json out.json]
 
-Автопроверка чисел: каждое число в ответе (цена, часы, Вт...) должно присутствовать в результатах инструментов,
-в базе знаний (правила, FAQ, контакты) или в сообщении клиента. Целые 1–3 (счёт «1 вариант») не проверяются;
+Сценарии бывают одноходовые ("messages" + "checks") и диалоги ("turns": [{"say": "...", "checks": [...]}]).
+В диалоге раннер ведёт историю как виджет: отправляет последние 12 сообщений, ответы бота обрезает до 800 символов, карточек в истории нет.
+Поле "history_fill" строит искусственно длинную историю «в обход виджета» (проверка серверных лимитов).
+
+Автопроверка чисел: каждое число в ответе (цена, часы, Вт...) должно присутствовать в результатах инструментов (за весь диалог),
+в базе знаний (правила, FAQ, контакты) или в сообщениях клиента. Целые 1–3 (счёт «1 вариант») не проверяются;
 для значений в тысячах допускается пересчёт Вт → кВт.
 """
 import argparse
@@ -23,6 +27,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+HISTORY_MAX, ASSISTANT_MAX = 12, 800
 
 
 def nums(text):
@@ -51,6 +56,11 @@ def http(method, url, body=None, origin=None, timeout=45):
         return 0, str(e)
 
 
+def client_payload(history):
+    """То, что отправляет виджет: последние 12 сообщений, ответы бота до 800 символов, только role и text."""
+    return [{"role": m["role"], "text": m["text"][:ASSISTANT_MAX] if m["role"] == "assistant" else m["text"]} for m in history[-HISTORY_MAX:]]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--main", required=True)
@@ -76,35 +86,16 @@ def main():
     if a.only:
         cases = [c for c in cases if c["id"] in a.only.split(",")]
 
-    results = []
-    for case in cases:
-        base = targets.get(case["target"])
-        if not base:
-            results.append({"id": case["id"], "name": case["name"], "ok": None, "fails": ["пропущен: не задан сервер " + case["target"]], "ms": 0})
-            continue
-        t0 = time.time(); fails = []; status = 0; resp = {}; reply = ""; cards = []
-        origin = case.get("origin", a.origin)
-        if case.get("kind") == "health":
-            status, raw = http("GET", base + "/health")
-            try: resp = json.loads(raw)
-            except Exception: resp = {}
-            if not resp.get("ok"): fails.append("ответ /health без ok=true")
-        else:
-            msgs = case.get("messages") or [{"role": "user", "text": "x" * case.get("long", 1)}]
-            if case.get("long"): msgs = [{"role": "user", "text": "Подберите станцию " + "для холодильника " * 40}][:1]; msgs[0]["text"] = (msgs[0]["text"] * 2)[:case["long"] + 50]
-            reps = 3 if case.get("kind") == "rate" else 1
-            for _ in range(reps):
-                status, raw = http("POST", base + "/chat", {"messages": msgs}, origin)
-                time.sleep(0.2)
-            try: resp = json.loads(raw)
-            except Exception: resp = {}; fails.append("ответ не JSON: " + raw[:80])
-            reply = resp.get("reply", ""); cards = resp.get("cards", [])
+    def evaluate(checks, numbers_on, status, resp, ctx, tag):
+        """Проверки одного хода. ctx: накопленные результаты инструментов и тексты клиента за весь диалог."""
+        fails = []
+        reply = resp.get("reply", ""); cards = resp.get("cards", [])
         tools = (resp.get("trace") or {}).get("tools", [])
 
         def need(cond, msg):
-            if not cond: fails.append(msg)
+            if not cond: fails.append(tag + msg)
 
-        for ch in case["checks"]:
+        for ch in checks:
             t = ch["t"]
             if t == "status": need(status == ch["v"], "HTTP %s, ожидался %s" % (status, ch["v"]))
             elif t == "handoff": need(bool(resp.get("handoff")) == ch["v"], "handoff=%s, ожидался %s" % (resp.get("handoff"), ch["v"]))
@@ -115,6 +106,7 @@ def main():
                 need(sm.get("total_watts", 0) >= ch["watts"] and sm.get("avg_watts", 0) >= ch["avg"],
                      "в select_stations переданы не все приборы: сумма %s/%s Вт, ожидалось не меньше %s/%s" % (sm.get("total_watts"), sm.get("avg_watts"), ch["watts"], ch["avg"]))
             elif t == "cards_min": need(len(cards) >= ch["n"], "карточек %d, нужно не меньше %d" % (len(cards), ch["n"]))
+            elif t == "cards_body": need(bool(cards) and all(c["code"].endswith("-" + ch["v"]) for c in cards), "не все карточки с корпусом %s: %s" % (ch["v"], [c["code"] for c in cards]))
             elif t == "tool_called": need(any(x["name"] == ch["name"] for x in tools), "не вызван инструмент " + ch["name"])
             elif t == "has": need(any(re.search(p, reply, re.I) for p in ch["re"]), "в ответе нет ни одного из: %s" % ch["re"])
             elif t == "has_all": need(all(re.search(p, reply, re.I) for p in ch["re"]), "в ответе нет всех из: %s" % ch["re"])
@@ -127,7 +119,7 @@ def main():
             elif t == "price":
                 want = st_by[ch["code"]]["price_rub"]
                 need(float(want) in nums(reply), "в ответе нет цены %s" % want)
-                need(any(c["code"] == ch["code"] and c["price"] == want for c in cards), "нет карточки %s с ценой %s" % (ch["code"], want))
+                need(any(c["code"] == ch["code"] and c["price"] == want for c in cards) or not ch.get("card", True), "нет карточки %s с ценой %s" % (ch["code"], want))
             elif t == "cards_fit":
                 loads = [ld_by[i] for i in ch["loads"]]
                 watts = sum(20 if l["watts"] is None else l["watts"] for l in loads)
@@ -135,22 +127,78 @@ def main():
                 start = max([l["start"] or 0 for l in loads] + [0])
                 for c in cards:
                     s = st_by.get(c["code"])
-                    if not s: fails.append("карточка с неизвестным кодом " + c["code"]); continue
+                    if not s: fails.append(tag + "карточка с неизвестным кодом " + c["code"]); continue
                     hours = s["cap_wh"] * kb["eff"] / avg
                     need(s["power_w"] >= watts, "%s: мощность %d < нагрузки %d" % (c["code"], s["power_w"], watts))
                     need(s["peak_w"] >= start, "%s: пик %d < пусковой %d" % (c["code"], s["peak_w"], start))
                     need(hours >= ch["hours"], "%s: часов %.1f < %s" % (c["code"], hours, ch["hours"]))
                     need(c["price"] == s["price_rub"], "%s: цена в карточке %s, в каталоге %s" % (c["code"], c["price"], s["price_rub"]))
-        if case.get("numbers", True) and reply:
-            allowed = set(static_nums)
-            for m in case.get("messages") or []: allowed |= nums(m["text"])
-            for x in tools: allowed |= nums(json.dumps(x["result"], ensure_ascii=False))
+            elif t == "charge_numbers":
+                # числа времени зарядки в ответе должны совпадать с базой знаний (t80/t100 или диапазоны)
+                s = st_by[ch["code"]]["charge"]; want = set()
+                for key in ("t80_h", "t100_h"):
+                    v = s.get(key)
+                    if isinstance(v, dict): want |= {float(v["lo"]), float(v["hi"])}
+                    elif v is not None: want.add(float(v))
+                got = nums(reply)
+                need(bool(want & got), "в ответе нет чисел зарядки из базы знаний %s" % sorted(want))
+        for x in tools: ctx["tool_nums"] |= nums(json.dumps(x["result"], ensure_ascii=False))
+        if numbers_on and reply:
+            allowed = set(static_nums) | ctx["tool_nums"] | ctx["user_nums"]
             for v in list(allowed):
                 if v >= 100 and v % 100 == 0: allowed.add(v / 1000)
             odd = sorted(v for v in nums(reply) if v not in allowed and not (v in (1.0, 2.0, 3.0)))
-            if odd: fails.append("числа в ответе, которых нет в инструментах/базе: %s" % odd)
+            if odd: fails.append(tag + "числа в ответе, которых нет в инструментах/базе: %s" % odd)
+        return fails
+
+    results = []
+    for case in cases:
+        base = targets.get(case["target"])
+        if not base:
+            results.append({"id": case["id"], "name": case["name"], "ok": None, "fails": ["пропущен: не задан сервер " + case["target"]], "ms": 0})
+            continue
+        t0 = time.time(); fails = []; status = 0; resp = {}; reply = ""; cards = []; transcript = []
+        origin = case.get("origin", a.origin)
+        ctx = {"tool_nums": set(), "user_nums": set()}
+        if case.get("kind") == "health":
+            status, raw = http("GET", base + "/health")
+            try: resp = json.loads(raw)
+            except Exception: resp = {}
+            if not resp.get("ok"): fails.append("ответ /health без ok=true")
+            fails += evaluate(case["checks"], False, status, resp, ctx, "")
+        elif case.get("turns"):
+            history = []
+            fill = case.get("history_fill")
+            if fill:  # длинная история «в обход виджета»: много пар, ответы ассистента намного длиннее лимитов
+                for i in range(fill["pairs"]):
+                    history.append({"role": "user", "text": "Расскажи про зарядку, вопрос %d" % (i + 1)})
+                    history.append({"role": "assistant", "text": ("Станция заряжается от розетки 220 В. " * 60)[:fill["assistant_chars"]]})
+            for n, turn in enumerate(case["turns"], 1):
+                history.append({"role": "user", "text": turn["say"]}); ctx["user_nums"] |= nums(turn["say"])
+                payload = history if case.get("no_client_trim") else client_payload(history)
+                status, raw = http("POST", base + "/chat", {"messages": payload}, origin)
+                time.sleep(0.2)
+                try: resp = json.loads(raw)
+                except Exception: resp = {}; fails.append("ход %d: ответ не JSON: %s" % (n, raw[:80]))
+                reply = resp.get("reply", ""); cards = resp.get("cards", [])
+                transcript.append({"say": turn["say"], "reply": reply, "cards": [c["code"] for c in cards], "status": status})
+                fails += evaluate(turn.get("checks", []) + [{"t": "none", "re": ["длиннее \\d+ символов", "слишком длинн"]}], turn.get("numbers", case.get("numbers", True)), status, resp, ctx, "ход %d: " % n)
+                history.append({"role": "assistant", "text": reply})
+                if n < len(case["turns"]): time.sleep(a.pause)
+        else:
+            msgs = case.get("messages") or [{"role": "user", "text": "x" * case.get("long", 1)}]
+            if case.get("long"): msgs = [{"role": "user", "text": "Подберите станцию " + "для холодильника " * 40}][:1]; msgs[0]["text"] = (msgs[0]["text"] * 2)[:case["long"] + 50]
+            for m in msgs: ctx["user_nums"] |= nums(m["text"])
+            reps = 3 if case.get("kind") == "rate" else 1
+            for _ in range(reps):
+                status, raw = http("POST", base + "/chat", {"messages": msgs}, origin)
+                time.sleep(0.2)
+            try: resp = json.loads(raw)
+            except Exception: resp = {}; fails.append("ответ не JSON: " + raw[:80])
+            reply = resp.get("reply", ""); cards = resp.get("cards", [])
+            fails += evaluate(case["checks"], case.get("numbers", True), status, resp, ctx, "")
         results.append({"id": case["id"], "name": case["name"], "ok": not fails, "fails": fails, "ms": int((time.time() - t0) * 1000),
-                        "reply": reply, "cards": [c["code"] for c in cards], "handoff": resp.get("handoff"), "status": status})
+                        "reply": reply, "cards": [c["code"] for c in cards], "handoff": resp.get("handoff"), "status": status, "turns": transcript})
         time.sleep(a.pause)
 
     print("%-26s %-5s %6s  %s" % ("сценарий", "итог", "мс", "примечание"))

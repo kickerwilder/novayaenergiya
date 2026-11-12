@@ -1,6 +1,6 @@
 "use strict";
 /* Сверка «до/после» после выноса расчётов в assets/calc.js.
-   «До» — функции из assets/app.js на указанной ревизии git (по умолчанию origin/main), «после» — текущий app.js + calc.js.
+   «До» — функции из assets/app.js на указанной ревизии git (по умолчанию c86afc3, последняя ревизия до выноса в calc.js), «после» — текущий app.js + calc.js.
    Матрица: все 42 версии × случайные наборы из 18 приборов (+ пустой, одиночные, все сразу).
    Запуск из корня репозитория: node tests/calc_equivalence.js [ревизия] [число_наборов] */
 const fs = require("fs");
@@ -9,7 +9,7 @@ const vm = require("vm");
 const { execFileSync } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
-const REV = process.argv[2] || "origin/main";
+const REV = process.argv[2] || "c86afc3"; /* последняя ревизия до выноса расчётов в calc.js */
 const SETS = parseInt(process.argv[3] || "400", 10);
 
 function readJs(rel, names) {
@@ -45,7 +45,7 @@ const oldApi = vm.runInNewContext(
 
 /* «после»: функции текущего app.js, которые теперь опираются на calc.js */
 const newSrc = fs.readFileSync(path.join(ROOT, "assets", "app.js"), "utf8");
-const newBody = ["selInfo", "runtimeFor", "chargeHtml"].map((n) => extractFn(newSrc, n)).join("\n");
+const newBody = ["selInfo", "runtimeFor", "chargeTimesOf", "chargeHtml"].map((n) => extractFn(newSrc, n)).join("\n");
 const newApi = vm.runInNewContext(
   "var C=NECalc, D=DATA, EFF=D.eff, PH=D.phone_wh, N=C.N, dec=C.dec, state={sel:{}};\n" + newBody +
   "\n({state:state, selInfo:selInfo, runtimeFor:runtimeFor, chargeHtml:chargeHtml, hoursText:C.hoursText, fits:C.fits, rangeText:C.rangeText, shortage:C.shortage, tableText:C.tableText})",
@@ -77,7 +77,13 @@ DATA.combos.forEach((c) => {
   Object.keys(c.vers).forEach((k) => {
     const V = c.vers[k]; versions++;
     const ctx = V.code;
-    eq("зарядка", oldApi.chargeHtml(V, c), newApi.chargeHtml(V, c), ctx);
+    /* зарядка: у версий с подтверждёнными данными и расчётом числа часов те же, что до выноса в calc.js (формулировка строки изменена);
+       у версий с ориентировочным диапазоном (basis "range", новое) строка содержит диапазон и пометку */
+    const hoursOf = (arr) => (arr[0].match(/\d+(?:,\d+)? ч/g) || []).join("|");
+    if ((CHARGE[V.code] || {}).basis === "range") {
+      const t = newApi.chargeHtml(V, c)[0];
+      eq("зарядка: диапазон и пометка", /≈ [\d,]+–[\d,]+ ч.*≈ [\d,]+–[\d,]+ ч.*ориентировочно/.test(t), true, ctx + " " + t);
+    } else eq("зарядка (часы)", hoursOf(oldApi.chargeHtml(V, c)), hoursOf(newApi.chargeHtml(V, c)), ctx);
     eq("maxSocket (calc.js vs поле каталога)", V.maxSocket, NECalc.maxSocket(c.power, V.sockets), ctx);
     eq("пик", oldApi.peakOf(c), NECalc.peakOf(c), ctx);
     sets.forEach((sel, n) => {

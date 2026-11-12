@@ -42,7 +42,6 @@ CLARIFY = [
     "Точное число и тип розеток уточняются — называть только «по каталогу, точное число и тип уточняются».",
     "Допуск по выходному напряжению уточняется — цифр не называть.",
     "Сертификаты и соответствие стандартам уточняются — не обещать.",
-    "Время зарядки там, где в базе стоит charge.status = unknown, уточняется — писать «время зарядки уточняется».",
     "Работа тёмных моделей при низких температурах уточняется — отвечать «уточним у менеджера».",
     "Точная ёмкость по реальным замерам уточняется.",
     "Наличие, скидки, сроки, кроме «около 25 дней», рассрочка, оплата, адрес и режим работы — не обещать, направлять на телефон или почту.",
@@ -68,8 +67,9 @@ def load_prices():
 
 
 def load_charge():
-    s = read(ROOT / "data" / "charge.js")
-    return {m[0]: {"acW": int(m[1]), "basis": m[2]} for m in re.findall(r'"(Z[\w-]+)"\s*:\s*\{\s*"acW"\s*:\s*(\d+)\s*,\s*"basis"\s*:\s*"(\w+)"', s)}
+    t = read(ROOT / "data" / "charge.js")
+    i = t.index("const CHARGE = ")
+    return json.loads(t[t.index("{", i): t.rindex("}") + 1])
 
 
 def r1(x):
@@ -86,12 +86,13 @@ def build():
                 continue
             row = {r[0]: r[1] for r in v["rows"]}
             ch = charge.get(v["code"])
-            if ch:
+            if ch and ch.get("basis") == "range":
+                charge_info = {"basis": "range", "t80_h": ch["t80"], "t100_h": ch["t100"]}
+            elif ch and ch.get("acW"):
                 p = ch["acW"] * 0.9
-                charge_info = {"status": "confirmed" if ch["basis"] == "passport" else "estimate",
-                               "t80_h": r1(0.8 * c["cap"] / p), "t100_h": r1(c["cap"] / p * 1.2)}
+                charge_info = {"basis": ch["basis"], "t80_h": r1(0.8 * c["cap"] / p), "t100_h": r1(c["cap"] / p * 1.2)}
             else:
-                charge_info = {"status": "unknown"}
+                charge_info = {"basis": "none"}
             st = {
                 "code": v["code"], "combo": c["id"], "body": k, "bodyName": data["versions"][k]["name"],
                 "title": c["title"], "group": c["group"],

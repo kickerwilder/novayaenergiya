@@ -68,12 +68,26 @@
     return low ? r.text.replace("≈ ", "до ").replace(" сут", " суток") + " *" : r.text;
   }
 
-  /* зарядка от розетки 220 В: t80 = 0,8·E/(P·0,9); t100 = E/(P·0,9)·1,2; округление до 0,1 ч.
-     ch = CHARGE[код] ({acW, basis}); нет данных — null («Время зарядки уточняется») */
+  /* зарядка от розетки 220 В. ch = CHARGE[код]:
+     {acW, basis:"passport"|"estimate"}: t80 = 0,8·E/(P·0,9); t100 = E/(P·0,9)·1,2; округление до 0,1 ч;
+     {basis:"range", t80:{lo,hi}, t100:{lo,hi}}: ориентировочный диапазон по аналогичным моделям (часы, уже посчитаны скриптом).
+     Нет данных — null («Время зарядки уточняется»). */
   function chargeTimes(cap, ch) {
-    if (!(ch && ch.acW)) return null;
+    if (!ch) return null;
+    if (ch.basis === "range" && ch.t80 && ch.t100) {
+      return { kind: "range", estimate: true, t80: { lo: ch.t80.lo, hi: ch.t80.hi }, t100: { lo: ch.t100.lo, hi: ch.t100.hi } };
+    }
+    if (!ch.acW) return null;
     var p = ch.acW * 0.9, r1 = function (x) { return Math.round(x * 10) / 10; };
-    return { t80: r1(0.8 * cap / p), t100: r1(cap / p * 1.2), estimate: ch.basis === "estimate" };
+    return { kind: ch.basis === "estimate" ? "estimate" : "passport", t80: r1(0.8 * cap / p), t100: r1(cap / p * 1.2), estimate: ch.basis === "estimate" };
+  }
+  /* текст времени зарядки: «5,8 ч» (подтверждено), «≈ 4,3 ч» (расчёт), «≈ 4–6,5 ч» (диапазон); approx = нужна пометка «ориентировочно» */
+  function chargeText(t) {
+    function one(v) {
+      var core = (typeof v === "object") ? (v.lo === v.hi ? dec(v.lo, 1) : dec(v.lo, 1) + "–" + dec(v.hi, 1)) : dec(v, 1);
+      return (t.estimate ? "≈ " : "") + core + " ч";
+    }
+    return { t80: one(t.t80), t100: one(t.t100), approx: !!t.estimate, kind: t.kind };
   }
 
   /* предел одной розетки: для каждой группы «k × A А (до N Вт)» min(N, мощность станции, 2200 для 10 А, 3500 для 16 А);
@@ -94,6 +108,6 @@
     N: N, dec: dec, plural: plural, hoursText: hoursText, rangeText: rangeText,
     loadWatts: loadWatts, loadAvg: loadAvg, peakOf: peakOf,
     selection: selection, fits: fits, shortage: shortage,
-    runtimeFor: runtimeFor, tableText: tableText, chargeTimes: chargeTimes, maxSocket: maxSocket
+    runtimeFor: runtimeFor, tableText: tableText, chargeTimes: chargeTimes, chargeText: chargeText, maxSocket: maxSocket
   };
 });

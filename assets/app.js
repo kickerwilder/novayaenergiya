@@ -206,12 +206,13 @@ function priceHtml(code){
   if(SETTINGS.contactHref) h+='<a href="'+SETTINGS.contactHref+'">'+SETTINGS.contactLabel+'</a>';
   return '<div class="price">'+h+'</div>';
 }
-/* зарядка: t80 = 0,8·E/(P·0,9); t100 = E/(P·0,9)·1,2; округление до 0,1 ч */
+/* зарядка: расчёты в assets/calc.js; диапазоны ориентировочных данных пишет scripts/update_charge_estimates.py */
+function chargeTimesOf(V,c){return C.chargeTimes(c.cap,(typeof CHARGE!=="undefined")&&CHARGE[V.code])}
 function chargeHtml(V,c){
-  var ct=C.chargeTimes(c.cap,(typeof CHARGE!=="undefined")&&CHARGE[V.code]), li=[];
+  var ct=chargeTimesOf(V,c), li=[];
   if(ct){
-    var est=ct.estimate;
-    li.push('От розетки 220 В (комплектное зарядное): 0–80 % за '+(est?'≈ ':'')+dec(ct.t80,1)+' ч, 0–100 % за '+(est?'≈ ':'')+dec(ct.t100,1)+' ч'+(est?' (ориентировочно)':''));
+    var tx=C.chargeText(ct);
+    li.push('Время зарядки от сети 220 В: до 80 % — '+tx.t80+', до 100 % — '+tx.t100+(tx.approx?' (ориентировочно)':''));
   }else li.push('Время зарядки уточняется');
   var hasAnd=V.conn.some(function(x){return /Anderson/i.test(x)});
   li.push('Через разъёмы XT90 (до 30 А)'+(hasAnd?' и Anderson (до 50 А)':'')+'; солнечные панели — только через внешний MPPT-контроллер');
@@ -262,7 +263,7 @@ function cardHtml(c,S,open){
     return '<tr><th>'+esc(r.l.name+w)+'</th><td'+(r.ok?'':' class="no"')+'>'+esc(tx)+'</td></tr>'}).join("")+'</table>'+
     '<p class="fn">Время расчётное. Не учитывает собственное потребление станции при включённом инверторе (по паспорту изделия до 50 Вт): у приборов до 100 Вт фактическое время может быть меньше. Мелкие устройства лучше заряжать через USB.</p>';
   var saf=D.safety&&D.safety.length?'<h5>Безопасность</h5><ul class="warn">'+D.safety.map(function(u){return '<li>'+esc(u)+'</li>'}).join("")+'</ul>':'';
-  var chg='<details class="more chg"'+(open.c?' open':'')+'><summary>Зарядка</summary><div class="cbody"><ul>'+chargeHtml(V,c).map(function(u){return '<li>'+esc(u)+'</li>'}).join("")+'</ul></div></details>';
+  var chg='<details class="more chg"'+(open.c?' open':'')+'><summary>Зарядка</summary><div class="cbody"><ul>'+chargeHtml(V,c).map(function(u){return '<li>'+esc(u)+'</li>'}).join("")+'</ul>'+((chargeTimesOf(V,c)||{}).estimate?'<p class="fn">Ориентировочное время по аналогичным моделям; точное уточним при заказе.</p>':'')+'</div></details>';
   var fig='<figure class="fig"><h5>Порты и разъёмы (цифры на схеме)</h5><img src="'+V.diagram+'" alt="Схема портов и разъёмов: '+esc(c.title)+'" loading="lazy" width="900" height="'+V.dh+'"><ol>'+
     V.legend.map(function(g){return '<li><b>'+g.n+'</b><span>'+esc(g.ru)+'</span></li>'}).join("")+'</ol></figure>';
   var use='<h5>Для чего подходит</h5><ul>'+V.use.map(function(u){return '<li>'+esc(u)+'</li>'}).join("")+'</ul>';

@@ -83,7 +83,7 @@ description: "Работа с сайтом-каталогом портативн
 - Всё генерирует `scripts/build_seo.py` (без зависимостей, идемпотентный): блоки `<!-- SEO:BEGIN/END -->` в `<head>` (title ≤ 60, description ≤ 160, canonical, Open Graph, Twitter, theme-color, JSON-LD) и `<!-- FAQ:BEGIN/END -->` (видимые «Частые вопросы» из `scripts/faq.json`), а также `robots.txt` и `sitemap.xml`. Между маркерами руками не править.
 - Адрес сайта: константа `SITE_URL` в `build_seo.py`, единственное место.
 - JSON-LD: `Organization`, `WebSite`, `BreadcrumbList`, `Product` на каждую комбинацию (с `AggregateOffer` только при цене > 0; цена 0 в разметку не попадает), `FAQPage`. Без `aggregateRating` и отзывов.
-- **После любого обновления цен или каталога запускать `python scripts/build_all.py`** (build_bot_kb.py + build_seo.py).
+- **После любого обновления цен или каталога запускать `python scripts/build_all.py`** (update_charge_estimates.py + build_bot_kb.py + build_seo.py).
 - Сейчас сайт закрыт: `<meta name="robots" content="noindex,nofollow">` в `<head>` (комментарий «убрать при запуске на своём домене»). `robots.txt` без `Disallow` намеренно.
 - Тексты FAQ дословно от владельца; если факт в ответе расходится с `DATA` или текстом сайта, не выдумывай: остановись и опиши расхождение в отчёте. Репозиторий публичный: ни в текстах, ни в коде не называть источник характеристик иначе, чем «по паспорту изделия»; никакой маржи, наценок и себестоимости.
 
@@ -92,6 +92,7 @@ description: "Работа с сайтом-каталогом портативн
 - **При переезде на домен:** поменять `SITE_URL` в `scripts/build_seo.py`, запустить `python scripts/build_seo.py`, убрать `noindex,nofollow` из `index.html`, добавить сайт в Яндекс Вебмастер и Google Search Console, отправить `sitemap.xml`.
 
 ### 5.8 Чат-консультант
+- Время зарядки: `data/charge.js`, записи `passport` (подтверждено), `estimate` и временные `range` (ориентировочные диапазоны, их пишет `scripts/update_charge_estimates.py`; не трогает `passport` и `estimate`). Для `range` всегда пометка «ориентировочно».
 - Расчёты (подбор по приборам, часы, зарядка, предел розетки) только в `assets/calc.js` (UMD: сайт и бот). В `app.js` и в боте их не дублировать; после правок логики запускать `node tests/calc_equivalence.js`.
 - База знаний бота: `data/kb.json`, собирается `scripts/build_bot_kb.py` (идемпотентно, входит в `build_all.py`). Данные, которые уточняются (вес, габариты, число и тип розеток, допуск по напряжению, сертификаты, зарядка там, где «уточняется», низкие температуры у тёмных), — только в списке `clarify`, цифр по ним не называть.
 - Серверная прослойка: `bot/` (`core.js` handle(Request) → Response, `provider.js` Gemini за адаптером, `tools.js` инструменты, `prompt.md`). Документация: `bot/README.md`. Числа в ответах бота берутся только из результатов инструментов; карточки собирает код.

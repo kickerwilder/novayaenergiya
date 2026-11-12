@@ -5,6 +5,7 @@
   var cfg = null, panel, logEl, form, input, sendBtn, quickEl, closeBtn, built = false, busy = false, opened = false;
   var msgs = [];      /* что отправляется боту: [{role, text}] */
   var ui = [];        /* что показано в ленте (для восстановления из sessionStorage) */
+  var HISTORY_MAX = 12, ASSISTANT_MAX = 800;   /* в историю уходят последние 12 сообщений; ответы бота обрезаются до 800 символов */
   var PHONE = "+7 978 728-00-02", EMAIL = "apv0050@gmail.com", KEY = "ne_chat_v1";
   var WELCOME = "Здравствуйте! Я ИИ-консультант НОВОЙ ЭНЕРГИИ. Подскажу, какая станция подойдёт под ваши приборы и на сколько часов её хватит. Напишите, что нужно питать, и сколько часов автономии нужно.";
   var QUICK = ["Подобрать под мои приборы", "Хватит ли на холодильник и котёл?", "Как заряжается станция?", "Сроки и гарантия"];
@@ -83,13 +84,13 @@
     var u = { role: "user", text: text };
     ui.push(u); render(u);
     msgs.push({ role: "user", text: text });
-    if (msgs.length > 20) msgs = msgs.slice(-20);
+    if (msgs.length > HISTORY_MAX) msgs = msgs.slice(-HISTORY_MAX);
     input.value = ""; resize();
     setBusy(true);
     var ctl = window.AbortController ? new AbortController() : null;
     var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 30000);
     fetch(cfg.url.replace(/\/+$/, "") + "/chat", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ messages: msgs }),
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ messages: payload() }),
       signal: ctl ? ctl.signal : undefined
     }).then(function (r) { return r.json(); }).then(function (d) {
       clearTimeout(timer);
@@ -102,6 +103,13 @@
       var item = { role: "bot", text: "Сейчас не могу ответить, позвоните " + PHONE + " или напишите на " + EMAIL, cards: [], handoff: true };
       msgs.pop(); ui.push(item); store(true);   /* сообщение клиента не попадает в историю, если ответа не было */
       setBusy(false); render(item);
+    });
+  }
+
+  /* что уходит на сервер: только role и text, последние сообщения; длинные ответы бота обрезаются (карточек и служебных данных нет) */
+  function payload() {
+    return msgs.slice(-HISTORY_MAX).map(function (m) {
+      return { role: m.role, text: m.role === "assistant" ? String(m.text).slice(0, ASSISTANT_MAX) : String(m.text) };
     });
   }
 
@@ -136,7 +144,7 @@
 
     var saved = store(false);
     if (saved && saved.ui && saved.ui.length) {
-      msgs = saved.msgs || []; ui = saved.ui;
+      msgs = (saved.msgs || []).slice(-HISTORY_MAX); ui = saved.ui;
       ui.forEach(render); quickEl.hidden = true;
     } else { addBubble("bot", WELCOME); }
 

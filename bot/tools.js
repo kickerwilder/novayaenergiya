@@ -131,6 +131,19 @@ function selectStations(args, kb) {
   };
 }
 
+/* зарядка: диапазоны и «ориентировочно» для basis range/estimate, точное время для passport; текст готовит calc.js */
+function chargeFacts(ch) {
+  if (!ch || ch.basis === "none") return { basis: "none", text: "время зарядки уточняется" };
+  const t = { kind: ch.basis, estimate: ch.basis !== "passport", t80: ch.t80_h, t100: ch.t100_h };
+  const x = C.chargeText(t);
+  return {
+    basis: ch.basis, approximate: x.approx,
+    to_80_percent: x.t80, to_100_percent: x.t100,
+    t80_h: ch.t80_h, t100_h: ch.t100_h,
+    note: x.approx ? "ориентировочно, по аналогичным моделям; точное время уточним при заказе" : "подтверждённое время",
+  };
+}
+
 function stationFacts(st, kb) {
   const c = adapt(st);
   const examples = ["router", "laptop", "fridge", "kettle"].map((id) => kb.loads.find((l) => l.id === id)).filter(Boolean).map((l) => ({
@@ -144,9 +157,7 @@ function stationFacts(st, kb) {
     max_socket_w: st.maxSocket_w,
     sockets_catalog: st.sockets_catalog, sockets_note: "по каталогу; точное число и тип розеток уточняются у менеджера",
     dc_output: st.dc_output,
-    charge: st.charge.status === "unknown"
-      ? { status: "unknown", text: "время зарядки уточняется" }
-      : { status: st.charge.status === "estimate" ? "ориентировочно" : "подтверждено паспортом изделия", t80_h: st.charge.t80_h, t100_h: st.charge.t100_h },
+    charge: chargeFacts(st.charge),
     temp_charge: st.temp_charge, temp_discharge: st.temp_discharge,
     runtime_examples: examples,
   };

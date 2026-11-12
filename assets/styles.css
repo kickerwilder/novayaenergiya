@@ -33,7 +33,7 @@ button,select,input{font:inherit;color:inherit}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .wrap{max-width:1200px;margin:0 auto;padding:0 20px}
 h1,h2,h3,h4,h5{font-family:var(--head)}
-.sec{margin:44px 0 0;scroll-margin-top:100px} /* шапка 61 px + 8 px запаса + 16 px: у блоков .reveal при прокрутке ещё есть сдвиг translateY(16px) */
+.sec{margin:44px 0 0;scroll-margin-top:92px} /* шапка ≤ 64 px + 8 px запаса + 16 px: у блоков .reveal при прокрутке ещё есть сдвиг translateY(16px) */
 .sec>h2{margin:0 0 6px;font:700 clamp(21px,3vw,28px)/1.2 var(--head);letter-spacing:-.01em}
 .sec>p.lead{margin:0 0 18px;color:var(--muted);max-width:68ch}
 
@@ -42,7 +42,10 @@ h1,h2,h3,h4,h5{font-family:var(--head)}
 .bar::after{content:"";position:absolute;inset:0;z-index:-1;box-shadow:0 8px 20px rgba(27,33,39,.14);opacity:0;transition:opacity .25s ease;pointer-events:none}
 .bar.scrolled::after{opacity:1}
 .bar-in{display:flex;align-items:center;gap:6px 22px;min-height:60px}
-.brand{font:700 17px/1 var(--head);letter-spacing:.02em;color:var(--ink);text-decoration:none;white-space:nowrap;transform-origin:left center;transition:transform .25s ease;padding:12px 0}
+.brand{display:inline-flex;flex-direction:column;gap:2px;color:var(--accent-ink);text-decoration:none;white-space:nowrap;transform-origin:left center;transition:transform .25s ease;padding:7px 0}
+.brand:hover,.brand:focus-visible{color:var(--accent-ink)}
+.brand-n{font:700 17px/1.05 var(--head);letter-spacing:.02em}
+.brand-s{font:500 12px/1.1 var(--body);text-transform:uppercase;letter-spacing:.07em}
 .bar.scrolled .brand{transform:scale(.92)}
 .nav{display:flex;gap:2px}
 .nav a{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border-radius:6px;color:var(--ink);text-decoration:none;font-weight:500;font-size:14.5px}
@@ -60,8 +63,7 @@ h1,h2,h3,h4,h5{font-family:var(--head)}
 .btn.sm{padding:0 16px;font-size:14px}
 
 /* hero, вариант A */
-.hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:32px 40px;align-items:center;padding:34px 0 6px}
-.eyebrow{margin:0 0 12px;font:700 13px/1.3 var(--head);letter-spacing:.08em;color:var(--accent-ink)}
+.hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:24px 40px;align-items:start;padding:10px 0 6px}
 .hero h1{margin:0 0 14px;font:700 clamp(27px,4.2vw,44px)/1.07 var(--head);letter-spacing:-.02em}
 .hero h1 em{font-style:normal;color:var(--accent-ink)}
 .hero .lead{margin:0;color:var(--muted);font-size:16.5px;max-width:56ch}
@@ -237,10 +239,25 @@ details[open]>summary::before{content:"–"}
 .js .reveal{opacity:0;transform:translateY(16px);transition:opacity .5s ease,transform .5s ease}
 .js .reveal.in{opacity:1;transform:none}
 
+/* ≤900 px: визуальный порядок hero без изменения DOM: H1, видео с плашками, цена и срок, кнопки, пояснение, статистика */
+@media (max-width:900px){
+  .hero{grid-template-columns:minmax(0,1fr);grid-template-areas:"h1" "vis" "from" "term" "cta" "lead" "facts";gap:0;padding:10px 0 0;align-items:start}
+  .hero-text{display:contents}
+  .hero h1{grid-area:h1;margin:0 0 10px;font-size:clamp(22px,5.4vw,34px);line-height:1.1}
+  .hero-vis{grid-area:vis;width:100%;max-width:640px;justify-self:start}
+  .bar-c .btn{display:none} /* до 900 px в шапке остаётся телефон: иначе логотип в две строки не помещается */
+  .nav a{padding:0 9px}
+  .hero .from{grid-area:from;margin:12px 0 0}
+  .hero .term{grid-area:term;margin:2px 0 0}
+  .hero .cta{grid-area:cta;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .hero .cta .btn{flex:none;min-width:0;padding:0 10px}
+  .hero .lead{grid-area:lead;margin:16px 0 0}
+  .hero .facts{grid-area:facts;margin-top:18px}
+}
+@media (max-width:1100px){
+  .bar-c .mail{display:none} /* логотип в две строки стал шире: почта в шапке скрывается раньше */
+}
 @media (max-width:1000px){
-  .hero{grid-template-columns:1fr;gap:26px}
-  .hero-vis{justify-self:start}
-  .bar-c .mail{display:none}
   .contacts{grid-template-columns:1fr}
   .main{grid-template-columns:210px minmax(0,1fr)}
   .side{grid-column:1 / -1;border-left:0;border-top:1.5px solid var(--line);flex-direction:row;flex-wrap:wrap;gap:12px 24px}
@@ -253,20 +270,20 @@ details[open]>summary::before{content:"–"}
   .bar-in{gap:0 10px;min-height:56px}
   .nav{margin-left:auto}
   .nav a{padding:0 5px;font-size:13px}
-  .brand{font-size:15px}
+  .brand-n{font-size:15px}
+  .brand-s{font-size:10.5px;letter-spacing:.05em}
   .dock{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:30;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--line);box-shadow:0 -6px 18px rgba(27,33,39,.12)}
   .dock .btn{min-height:48px}
   body{padding-bottom:calc(66px + env(safe-area-inset-bottom))}
   .sec,.card{scroll-margin-top:92px} /* шапка 57 px + 8 + 16 (сдвиг .reveal) */
 }
-@media (max-width:420px){
-  .nav a[href="#picker"]{display:none} /* на узких телефонах «Подобрать станцию» есть в hero; иначе шапка шире экрана */
+@media (max-width:480px){
+  .nav a:not([href="#catalog"]){display:none} /* на узких телефонах в шапке только «Каталог»; нижняя панель «Позвонить / Написать» остаётся */
 }
 @media (max-width:660px){
   .wrap{padding:0 14px}
-  .hero{padding-top:22px}
-  .cta .btn{flex:1 1 150px}
-  .brand{min-height:44px;display:inline-flex;align-items:center;padding:0}
+  .brand{min-height:44px;justify-content:center;padding:0}
+  .hkinds{margin-top:8px}
   .chip{min-height:44px;padding:0 15px}
   .tools input[type=search],.tools select{min-height:44px}
   summary{min-height:44px;display:flex;align-items:center}
