@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-STEPS = ["update_charge_estimates.py", "build_bot_kb.py", "build_seo.py"]
+STEPS = ["update_charge_estimates.py", "build_bot_kb.py", "build_models.py", "build_seo.py"]
 
 for name in STEPS:
     print("==> " + name)

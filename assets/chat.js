@@ -7,7 +7,7 @@
   var ui = [];        /* что показано в ленте (для восстановления из sessionStorage) */
   var HISTORY_MAX = 12, ASSISTANT_MAX = 800;   /* в историю уходят последние 12 сообщений; ответы бота обрезаются до 800 символов */
   var PHONE = "+7 978 728-00-02", EMAIL = "apv0050@gmail.com", KEY = "ne_chat_v1";
-  var WELCOME = "Здравствуйте! Я ИИ-консультант НОВОЙ ЭНЕРГИИ. Подскажу, какая станция подойдёт под ваши приборы и на сколько часов её хватит. Напишите, что нужно питать, и сколько часов автономии нужно.";
+  var WELCOME = "Здравствуйте! Я ИИ-консультант НОВОЙ ЭНЕРДЖИ. Подскажу, какая станция подойдёт под ваши приборы и на сколько часов её хватит. Напишите, что нужно питать, и сколько часов автономии нужно.";
   var QUICK = ["Подобрать под мои приборы", "Хватит ли на холодильник и котёл?", "Как заряжается станция?", "Сроки и гарантия"];
   var QUICK_TEXT = { "Подобрать под мои приборы": "Хочу подобрать станцию под мои приборы" };
   var mqMobile = window.matchMedia && window.matchMedia("(max-width: 760px)");
@@ -118,7 +118,7 @@
   function build() {
     if (built) return; built = true;
     panel = el("div", "chat"); panel.id = "chatPanel"; panel.setAttribute("role", "dialog"); panel.setAttribute("aria-label", "Чат с консультантом"); panel.hidden = true;
-    var hd = el("div", "chat-hd"); hd.appendChild(el("b", null, "Консультант НОВАЯ ЭНЕРГИЯ"));
+    var hd = el("div", "chat-hd"); hd.appendChild(el("b", null, "Консультант НОВАЯ ЭНЕРДЖИ"));
     closeBtn = el("button", "chat-x", "×"); closeBtn.type = "button"; closeBtn.setAttribute("aria-label", "Закрыть чат");
     closeBtn.addEventListener("click", function () { close(true); });
     hd.appendChild(closeBtn); panel.appendChild(hd);
@@ -140,6 +140,9 @@
     form.appendChild(input); form.appendChild(sendBtn);
     form.addEventListener("submit", function (e) { e.preventDefault(); send(input.value); });
     panel.appendChild(form);
+    var legalEl = el("div", "chat-legal");
+    legalEl.innerHTML = 'Отправляя сообщение, вы соглашаетесь с <a href="privacy.html" target="_blank" rel="noopener">Политикой обработки персональных данных</a>';
+    panel.appendChild(legalEl);
     document.body.appendChild(panel);
 
     var saved = store(false);

@@ -256,6 +256,7 @@ function cardHtml(c,S,open){
       return '<li><span>'+esc(nm)+'</span><b>'+esc(r.text)+'</b></li>'}).join("")+'</ul></div>';
   }
   side+=priceHtml(V.code);
+  side+='<a class="btn sm more-link" href="models/'+c.id.toLowerCase()+'.html">Подробнее о модели →</a>';
   var rows=V.rows.map(function(r){return '<tr><th>'+esc(r[0])+'</th><td>'+esc(r[1])+'</td></tr>'}).join("");
   var rtt='<h5>На что хватает (расчётная оценка)</h5><table>'+rt.map(function(r){
     var w=r.l.watts?' ('+N(r.l.watts)+' Вт'+(r.l.avg&&r.l.avg!==r.l.watts?', в среднем '+N(r.l.avg)+' Вт':'')+')':'';
@@ -486,5 +487,57 @@ document.getElementById("gl").innerHTML=D.glossary.map(function(g){return '<dt>'
   else setTimeout(function(){load(function(){})},5000);
 })();
 
+/* управление скроллом: открытие строго с начала страницы, если нет хэша */
+if ('scrollRestoration' in history) {
+  try { history.scrollRestoration = 'manual'; } catch (_) {}
+}
+
+/* плавное скрытие нижней панели контактов на первом экране (Hero) */
+(function(){
+  var dock = document.querySelector(".dock"), hero = document.querySelector(".hero");
+  if (!dock || !hero || !("IntersectionObserver" in window)) return;
+  dock.classList.add("dock-hidden");
+  var obs = new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      if (e.isIntersecting) dock.classList.add("dock-hidden");
+      else dock.classList.remove("dock-hidden");
+    });
+  }, { threshold: 0.08 });
+  obs.observe(hero);
+})();
+
+/* кнопка «Наверх» (десктоп) */
+(function(){
+  var btn = document.getElementById("toTop");
+  if (!btn) return;
+  function check(){
+    if (window.scrollY > 500) btn.classList.add("visible");
+    else btn.classList.remove("visible");
+  }
+  window.addEventListener("scroll", check, { passive: true });
+  btn.addEventListener("click", function(){
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  check();
+})();
+
+/* плашка cookie (152-ФЗ) */
+(function(){
+  var b = document.getElementById("cookieBanner"), btn = document.getElementById("cookieAccept");
+  if (!b || !btn) return;
+  try {
+    if (!localStorage.getItem("ne_cookie_consent")) {
+      b.hidden = false;
+      btn.addEventListener("click", function(){
+        localStorage.setItem("ne_cookie_consent", "1");
+        b.hidden = true;
+      });
+    }
+  } catch (_) {}
+})();
+
 buildAcc(); render();
+if (!location.hash) {
+  window.scrollTo(0, 0);
+}
 })();

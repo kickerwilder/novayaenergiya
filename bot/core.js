@@ -40,7 +40,12 @@ function overDailyCap(env) {
 
 /* ---------- ответы ---------- */
 function parseOrigins(s) {
-  return String(s === undefined ? "https://kickerwilder.github.io" : s).split(",").map((x) => x.trim().replace(/\/+$/, "")).filter(Boolean);
+  return String(s === undefined ? "https://novaya-energy.ru" : s).split(",").map((x) => x.trim().replace(/\/+$/, "")).filter(Boolean);
+}
+function isOriginAllowed(origin, env) {
+  if (!origin) return false;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  return parseOrigins(env.ALLOWED_ORIGINS).includes(origin);
 }
 function respond(obj, status, origin, extra) {
   const headers = Object.assign({ "content-type": "application/json; charset=utf-8", "cache-control": "no-store" }, extra || {});
@@ -179,7 +184,7 @@ async function handle(request, env) {
   env = env || process.env;
   const url = new URL(request.url);
   const origin = (request.headers.get("origin") || "").replace(/\/+$/, "");
-  const originOk = !!origin && parseOrigins(env.ALLOWED_ORIGINS).includes(origin);
+  const originOk = isOriginAllowed(origin, env);
   const method = request.method.toUpperCase();
 
   if (url.pathname === "/health" && (method === "GET" || method === "HEAD")) return respond({ ok: true }, 200, originOk ? origin : "");

@@ -1,7 +1,4 @@
-# Сайт сейчас закрыт от индексации тегом <meta name="robots" content="noindex,nofollow"> в index.html.
-# Disallow здесь намеренно нет: если запретить обход, поисковик не прочитает noindex и может показать адрес в выдаче.
-# При запуске на своём домене достаточно убрать noindex из index.html (см. README).
 User-agent: *
 Allow: /
 
-Sitemap: https://kickerwilder.github.io/novayaenergiya/sitemap.xml
+Sitemap: https://novaya-energy.ru/sitemap.xml

@@ -267,18 +267,30 @@ details[open]>summary::before{content:"–"}
 }
 @media (max-width:760px){
   .bar-c{display:none}
-  .bar-in{gap:0 10px;min-height:56px}
-  .nav{margin-left:auto}
-  .nav a{padding:0 5px;font-size:13px}
+  .bar-in{gap:0 8px;min-height:56px}
+  .nav{display:flex;gap:2px;margin-left:auto}
+  .nav a{padding:0 6px;min-height:40px;font-size:12.5px;white-space:nowrap}
   .brand-n{font-size:15px}
-  .brand-s{font-size:10.5px;letter-spacing:.05em}
-  .dock{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:30;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--line);box-shadow:0 -6px 18px rgba(27,33,39,.12)}
+  .brand-s{font-size:10px;letter-spacing:.04em}
+  .dock{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:30;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--line);box-shadow:0 -6px 18px rgba(27,33,39,.12);transition:transform .25s ease,opacity .25s ease;transform:translateY(0);opacity:1}
+  .dock.dock-hidden{opacity:0;pointer-events:none;transform:translateY(100%)}
   .dock .btn{min-height:48px}
   body{padding-bottom:calc(66px + env(safe-area-inset-bottom))}
   .sec,.card{scroll-margin-top:92px} /* шапка 57 px + 8 + 16 (сдвиг .reveal) */
 }
 @media (max-width:480px){
-  .nav a:not([href="#catalog"]){display:none} /* на узких телефонах в шапке только «Каталог»; нижняя панель «Позвонить / Написать» остаётся */
+  .bar-in{gap:0 4px;padding:0}
+  .brand{padding:3px 0}
+  .brand-n{font-size:14px;line-height:1.05}
+  .brand-s{font-size:9px;letter-spacing:.03em}
+  .nav{gap:1px}
+  .nav a{padding:0 4px;font-size:12px;min-height:38px}
+}
+@media (max-width:375px){
+  .bar-in{gap:0 2px}
+  .brand-n{font-size:13px}
+  .brand-s{font-size:8.5px;letter-spacing:.02em}
+  .nav a{padding:0 2.5px;font-size:11px}
 }
 @media (max-width:660px){
   .wrap{padding:0 14px}
@@ -403,6 +415,97 @@ body.has-chat{padding-bottom:72px}
 .ac-m em{font:600 12px/1.3 var(--body);font-style:normal;color:var(--bad)}
 .ac-m.no{background:#eceff1;border-color:#b9c1c8;color:#6b757e}
 .ac-m.no b,.ac-m.no span{color:#6b757e}
+
+/* кнопка «Наверх» — строго десктоп */
+.to-top{position:fixed;right:24px;bottom:24px;z-index:25;width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line);background:#fff;color:var(--ink);box-shadow:0 4px 14px rgba(27,33,39,.12);display:inline-flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;cursor:pointer;opacity:0;pointer-events:none;transform:translateY(12px);transition:opacity .25s ease,transform .25s ease,background .15s ease,color .15s ease}
+.to-top:hover{background:var(--cool);color:var(--accent-ink);border-color:var(--accent)}
+.to-top.visible{opacity:1;pointer-events:auto;transform:translateY(0)}
+body.has-chat .to-top{bottom:76px;right:20px}
+@media (max-width:900px){
+  .to-top{display:none !important}
+}
+
+/* плашка куки (152-ФЗ) */
+.cookie-banner{position:fixed;left:20px;bottom:20px;z-index:50;max-width:440px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 18px;box-shadow:0 10px 30px rgba(27,33,39,.18);display:flex;align-items:center;gap:14px;font-size:13.5px;line-height:1.4}
+.cookie-banner[hidden]{display:none}
+.cookie-text{flex:1}
+.cookie-text a{color:var(--accent-ink);text-decoration:underline}
+.cookie-banner .btn{flex-shrink:0;min-height:38px;padding:0 14px;font-size:13.5px}
+@media (max-width:760px){
+  .cookie-banner{left:10px;right:10px;bottom:calc(66px + env(safe-area-inset-bottom) + 8px);max-width:none;padding:12px 14px;font-size:12.5px;gap:10px}
+  .cookie-banner .btn{min-height:36px;padding:0 12px;font-size:13px}
+}
+
+/* правовой блок в футере (ЗоЗПП, ст. 437 ГК РФ, 152-ФЗ) */
+.foot-legal{margin:18px 0;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:13px;line-height:1.55;color:var(--muted)}
+.legal-seller{margin:0 0 6px;color:var(--ink)}
+.legal-seller strong{font-weight:600}
+.legal-offer{margin:0 0 8px}
+.legal-links{margin:0}
+.legal-links a{color:var(--ink);text-decoration:underline;margin-right:14px}
+.legal-links a:hover{color:var(--accent-ink)}
+
+/* карточка: ссылка на отдельную страницу модели */
+.more-link{margin-top:10px;width:100%;text-align:center;font-size:13px;padding:0 12px;min-height:38px}
+
+/* стили для страниц моделей и хлебных крошек */
+.breadcrumbs{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:16px 0 8px;font-size:13.5px;color:var(--muted)}
+.breadcrumbs a{color:var(--ink);text-decoration:none}
+.breadcrumbs a:hover{color:var(--accent-ink);text-decoration:underline}
+.bc-sep{color:var(--line);user-select:none}
+.breadcrumbs span:last-child{color:var(--muted)}
+
+.model-header{margin:10px 0 24px}
+.model-header h1{margin:0 0 8px;font:700 clamp(24px,3.8vw,38px)/1.1 var(--head);letter-spacing:-.02em}
+.model-meta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:14.5px;color:var(--muted)}
+.model-meta .badge{display:inline-flex;padding:3px 10px;border-radius:6px;background:var(--cool);color:var(--ink);font-weight:600;font-size:13px}
+
+.model-layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:36px;margin:24px 0 40px;align-items:start}
+@media (max-width:900px){.model-layout{grid-template-columns:1fr;gap:24px}}
+
+.model-gallery{position:sticky;top:80px}
+.model-img-box{border:1.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel);aspect-ratio:4/3;position:relative}
+.model-img-box img{display:block;width:100%;height:100%;object-fit:cover}
+
+.model-switchers{margin-top:14px}
+.model-switch-title{font:600 13.5px var(--head);color:var(--muted);margin-bottom:8px}
+.model-switch-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.model-btn{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;background:#fff;text-align:left;cursor:pointer;font:inherit}
+.model-btn img{width:48px;height:38px;object-fit:cover;border-radius:4px;flex-shrink:0}
+.model-btn.active{border-color:var(--accent);background:var(--cool)}
+.model-btn b{display:block;font-size:13.5px;color:var(--ink)}
+.model-btn span{font-size:12px;color:var(--muted)}
+
+.model-buy{padding:24px;border:1.5px solid var(--line);border-radius:12px;background:var(--panel)}
+.model-price{font:700 clamp(28px,3vw,36px)/1 var(--head);color:var(--ink);letter-spacing:-.02em}
+.model-price small{font-size:14.5px;font-weight:500;color:var(--muted);margin-left:6px}
+.model-buy-meta{margin:12px 0 18px;font-size:14px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.model-cta{display:flex;flex-wrap:wrap;gap:10px}
+.model-cta .btn{flex:1 1 180px}
+
+.model-sec{margin:40px 0 0;padding-top:24px;border-top:1.5px solid var(--line)}
+.model-sec h2{margin:0 0 16px;font:700 clamp(20px,2.5vw,26px) var(--head);letter-spacing:-.01em}
+
+.rt-table{width:100%;border-collapse:collapse;font-size:14px;background:#fff;border-radius:8px;overflow:hidden;border:1.5px solid var(--line)}
+.rt-table th,.rt-table td{padding:10px 14px;border-bottom:1px solid var(--line);text-align:left}
+.rt-table th{background:var(--panel);font-weight:600}
+.rt-table tr:last-child th,.rt-table tr:last-child td{border-bottom:0}
+.rt-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:12.5px;font-weight:600}
+.rt-badge.ok{background:#e8f5e9;color:#2e7d32}
+.rt-badge.warn{background:#fff3e0;color:#e65100}
+.rt-badge.no{background:#ffebee;color:#c62828}
+
+.related-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;margin-top:16px}
+.related-card{border:1.5px solid var(--line);border-radius:10px;padding:14px;background:#fff;text-decoration:none;color:var(--ink);display:flex;flex-direction:column;gap:8px;transition:border-color .2s ease,box-shadow .2s ease}
+.related-card:hover{border-color:var(--accent);box-shadow:0 6px 16px rgba(27,33,39,.08)}
+.related-card img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px}
+.related-card b{font:700 15px var(--head)}
+.related-card span{font-size:13px;color:var(--muted)}
+.related-card .rel-price{margin-top:auto;font:700 16px var(--head);color:var(--accent-ink)}
+
+.chat-legal{margin-top:6px;font-size:11.5px;color:var(--muted);text-align:center;line-height:1.35}
+.chat-legal a{color:inherit;text-decoration:underline}
+
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.chat{transition:none;transform:none}.chat-typing::after{animation:none;width:1.1em}.ac-i{transition:none}.toast{transition:none}.card.flash{animation:none}
   .js .reveal,.js .reveal.in{opacity:1;transform:none;transition:none}
   .bar::after,.brand,.pic .ph .ghost{transition:none}

@@ -20,7 +20,8 @@
       import_prices.py  загрузка цен из CSV или таблицы владельца (XLSX) в data/prices.js
       split.py          одноразовый скрипт, которым index.html был разнесён по файлам
       update_data_v2.py скрипт обновления data/catalog.js (ресурс, пик, розетки, приборы); повторный запуск безопасен
-      build_all.py      общий порядок после обновления цен/каталога: update_charge_estimates.py, build_bot_kb.py, затем build_seo.py
+      build_all.py      общий порядок после обновления цен/каталога: update_charge_estimates.py, build_bot_kb.py, build_models.py, затем build_seo.py
+      build_models.py   генерация 29 отдельных SEO-страниц моделей в models/
       update_charge_estimates.py  ориентировочные диапазоны времени зарядки в data/charge.js
       build_bot_kb.py   база знаний чата data/kb.json
       build_seo.py      SEO-разметка, JSON-LD, блок «Частые вопросы», robots.txt и sitemap.xml
@@ -133,7 +134,7 @@
 
 Данные берутся только от владельца, ничего не выдумывать. Что добавить:
 
-- **Наименование организации или ФИО ИП**, **ИНН**, **ОГРН или ОГРНИП**, **адрес**. Для ООО ещё **КПП**. Место: блок `<footer class="foot">` в `index.html`, новый абзац `<p class="req">` под строкой `foot-brand` («НОВАЯ ЭНЕРГИЯ»), например: `ИП Фамилия И. О. · ИНН … · ОГРНИП … · Адрес: …`.
+- **Наименование организации или ФИО ИП**, **ИНН**, **ОГРН или ОГРНИП**, **адрес**. Для ООО ещё **КПП**. Место: блок `<footer class="foot">` в `index.html`, новый абзац `<p class="req">` под строкой `foot-brand` («НОВАЯ ЭНЕРДЖИ»), например: `ИП Фамилия И. О. · ИНН … · ОГРНИП … · Адрес: …`.
 - **Режим работы**. Место: блок `<section id="contacts">` в `index.html`, внутри `<div class="contacts">` ещё один `<div><h3>Режим работы</h3><p>…</p></div>`. Сетка сейчас в две колонки, для трёх блоков поменяйте `grid-template-columns` у `.contacts` в `assets/styles.css` на `repeat(3,minmax(0,1fr))` и уберите `max-width`.
 - Если нужен адрес и в блоке «Контакты», добавьте такой же `<div>` с заголовком «Адрес».
 

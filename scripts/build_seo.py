@@ -21,16 +21,16 @@ import sys
 from datetime import date
 from pathlib import Path
 
-SITE_URL = "https://kickerwilder.github.io/novayaenergiya/"  # со слэшем на конце
+SITE_URL = "https://novaya-energy.ru/"  # со слэшем на конце
 
 ROOT = Path(__file__).resolve().parent.parent
 INDEX = ROOT / "index.html"
 
-SITE_NAME = "НОВАЯ ЭНЕРГИЯ"
+SITE_NAME = "НОВАЯ ЭНЕРДЖИ"
 PHONE = "+79787280002"
 PHONE_TEXT = "+7 978 728-00-02"
 EMAIL = "apv0050@gmail.com"
-TITLE = "Портативные электростанции LiFePO4 — цены | НОВАЯ ЭНЕРГИЯ"
+TITLE = "Портативные электростанции LiFePO4 — цены | НОВАЯ ЭНЕРДЖИ"
 DESCRIPTION = ("Портативные электростанции 0,8–8 кВт, 1,5–23 кВт·ч на LiFePO4 с чистой синусоидой. "
                "Подбор по приборам, время работы, цены с доставкой в Россию.")
 OG_IMAGE = "img/og.jpg"
@@ -101,8 +101,18 @@ def build_products(data, prices):
 def build_graph(data, prices, faq):
     products, priced, unpriced = build_products(data, prices)
     graph = [
-        {"@type": "Organization", "@id": abs_url("#org"), "name": SITE_NAME, "url": SITE_URL, "telephone": PHONE, "email": EMAIL,
-         "logo": abs_url(LOGO)},
+        {"@type": "Organization", "@id": abs_url("#org"), "name": SITE_NAME,
+         "legalName": "Индивидуальный предприниматель Воробьёв Александр Павлович",
+         "url": SITE_URL, "telephone": PHONE_TEXT, "email": EMAIL,
+         "logo": abs_url(LOGO), "taxID": "910208709968",
+         "address": {
+             "@type": "PostalAddress",
+             "streetAddress": "Евпаторийское шоссе, д. 5Б, офис 1",
+             "addressLocality": "Симферополь",
+             "addressRegion": "Республика Крым",
+             "postalCode": "295000",
+             "addressCountry": "RU"
+         }},
         {"@type": "WebSite", "@id": abs_url("#website"), "name": SITE_NAME, "url": SITE_URL, "inLanguage": "ru",
          "publisher": {"@id": abs_url("#org")}},
         {"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Главная", "item": SITE_URL}]},
@@ -195,9 +205,6 @@ def main():
     changed = [write_if_changed(INDEX, text)]
 
     robots = (
-        "# Сайт сейчас закрыт от индексации тегом <meta name=\"robots\" content=\"noindex,nofollow\"> в index.html.\n"
-        "# Disallow здесь намеренно нет: если запретить обход, поисковик не прочитает noindex и может показать адрес в выдаче.\n"
-        "# При запуске на своём домене достаточно убрать noindex из index.html (см. README).\n"
         "User-agent: *\n"
         "Allow: /\n"
         "\n"
@@ -218,10 +225,17 @@ def main():
         d = re.search(r"<lastmod>([\d-]+)</lastmod>", old)
         if m and d and m.group(1) == digest:
             lastmod = d.group(1)
+
+    urls = [SITE_URL, SITE_URL + "privacy.html"]
+    for c in data["combos"]:
+        urls.append(SITE_URL + "models/%s.html" % c["id"].lower())
+
+    url_tags = "\n".join("  <url>\n    <loc>%s</loc>\n    <lastmod>%s</lastmod>\n  </url>" % (esc(u), lastmod) for u in urls)
     sitemap = ('<?xml version="1.0" encoding="UTF-8"?>\n'
                '<!-- data-hash: %s -->\n'
                '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-               '  <url>\n    <loc>%s</loc>\n    <lastmod>%s</lastmod>\n  </url>\n</urlset>\n' % (digest, esc(SITE_URL), lastmod))
+               '%s\n'
+               '</urlset>\n' % (digest, url_tags))
     changed.append(write_if_changed(sm_path, sitemap))
 
     print("Product: %d (с ценой: %d, без цены: %d); FAQ: %d вопросов" % (n_prod, n_priced, n_unpriced, len(faq)))
