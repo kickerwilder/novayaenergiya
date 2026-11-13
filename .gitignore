@@ -5,6 +5,9 @@ __pycache__/
 *.pyc
 
 # локальные секреты и зависимости бота
+.env
+.env.*
+*.env
 bot/.env
 bot/.env.*
 bot/node_modules/

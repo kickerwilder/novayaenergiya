@@ -79,6 +79,7 @@ def charge_text_for(cap, ch):
 # Бытовые и строительные нагрузки для инженерной таблицы
 APPLIANCES = [
     {"name": "Газовый котёл (настенный, двухконтурный)", "watts": 150, "avg": 100, "start": 0, "type": "time"},
+    {"name": "Тёплый пол (водяной, насос)", "watts": 60, "avg": 60, "start": 120, "type": "time"},
     {"name": "Холодильник с морозильной камерой", "watts": 150, "avg": 60, "start": 600, "type": "time"},
     {"name": "Wi-Fi роутер", "watts": 12, "avg": 12, "start": 0, "type": "time"},
     {"name": "Освещение (5 LED-ламп)", "watts": 50, "avg": 50, "start": 0, "type": "time"},
@@ -310,10 +311,12 @@ def build_page(combo, data, prices, charge, all_combos):
         f'<section class="model-sec">'
         f'  <h2>Что и сколько часов будет работать от этой электростанции</h2>'
         f'  <p class="lead">Расчёт автономной работы приборов от ёмкости {num(cap)} Вт·ч с учётом КПД инвертора 85 % и номинальной мощности {num(power)} Вт:</p>'
-        f'  <table class="rt-table">'
-        f'    <thead><tr><th>Прибор / нагрузка</th><th>Статус запуска</th><th>Время автономной работы</th></tr></thead>'
-        f'    <tbody>{"".join(rt_rows)}</tbody>'
-        f'  </table>'
+        f'  <div class="table-wrap">'
+        f'    <table class="rt-table">'
+        f'      <thead><tr><th>Прибор / нагрузка</th><th>Статус запуска</th><th>Время автономной работы</th></tr></thead>'
+        f'      <tbody>{"".join(rt_rows)}</tbody>'
+        f'    </table>'
+        f'  </div>'
         f'  <p class="fn">* Время расчётное. При включённом инверторе станция потребляет до 50 Вт (по паспорту изделия): у приборов до 100 Вт фактическое время работы может быть меньше. Мелкие гаджеты рекомендуется заряжать через штатные USB-порты.</p>'
         f'</section>'
     )
@@ -353,6 +356,7 @@ def build_page(combo, data, prices, charge, all_combos):
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="format-detection" content="telephone=no">
 <title>{esc(page_title)}</title>
 <meta name="description" content="{esc(meta_desc)}">
 <link rel="canonical" href="{esc(canonical)}">
@@ -414,11 +418,12 @@ def build_page(combo, data, prices, charge, all_combos):
     <p class="foot-brand">{esc(SITE_NAME)}</p>
     <p class="req"><a href="tel:{PHONE}">{PHONE_TEXT}</a> · <a href="mailto:{EMAIL}">{EMAIL}</a></p>
     <div class="foot-legal">
-      <p class="legal-seller"><strong>ИП Воробьёв Александр Павлович</strong> · ОГРНИП 326911200011729 · ИНН 910208709968 · Адрес: Республика Крым, г. Симферополь, Евпаторийское шоссе, д. 5Б, офис 1</p>
+      <p class="legal-seller"><strong>ИП Воробьёв Александр Павлович</strong> · ИНН 910208709968 · ОГРНИП 326911200011729<br>Республика Крым, г. Симферополь, Евпаторийское шоссе, д. 5Б, офис 1</p>
       <p class="legal-offer">Информация о ценах, характеристиках и комплектации носит информационный характер и не является публичной офертой, определяемой положениями ст. 437 ГК РФ. Точные параметры и комплектацию подтверждаем при оформлении заказа.</p>
       <p class="legal-links"><a href="../privacy.html">Политика обработки персональных данных</a> · <a href="../index.html#contacts">Реквизиты и контакты</a></p>
     </div>
     <p>Время работы — расчётная оценка: ёмкость × 0,85 ÷ средняя мощность приборов. Доставка в Россию: около 25 дней.</p>
+    <p class="copy">© 2026 НОВАЯ ЭНЕРДЖИ. Все права защищены.</p>
   </footer>
 </div>
 

@@ -5,6 +5,18 @@
 let C;
 try { C = require("./calc.js"); } catch (_) { C = require("../assets/calc.js"); }
 
+const LOAD_SYNONYMS = {
+  "floor_pump": "floor_pump",
+  "тёплый пол": "floor_pump",
+  "теплый пол": "floor_pump",
+  "водяной тёплый пол": "floor_pump",
+  "водяной теплый пол": "floor_pump",
+  "насос тёплого пола": "floor_pump",
+  "насос теплого пола": "floor_pump",
+  "циркуляционный насос": "floor_pump",
+  "насос отопления": "floor_pump",
+};
+
 const declarations = [
   {
     name: "select_stations",
@@ -14,11 +26,11 @@ const declarations = [
       properties: {
         loads: {
           type: "array",
-          description: "Приборы. Для приборов из списка (list_loads) указывай id и qty. Если прибора нет в списке — укажи watts (мощность при работе, Вт), avg (средняя, Вт) и start (пусковая, Вт; 0, если нет).",
+          description: "Приборы. Для приборов из списка (list_loads) указывай id (например, boiler, floor_pump для тёплого пола, fridge, tv) и qty. Если прибора нет в списке — укажи watts (мощность при работе, Вт), avg (средняя, Вт) и start (пусковая, Вт; 0, если нет).",
           items: {
             type: "object",
             properties: {
-              id: { type: "string", description: "id прибора из списка" },
+              id: { type: "string", description: "id прибора из списка (например boiler, floor_pump, fridge, router)" },
               qty: { type: "integer", description: "количество, по умолчанию 1" },
               name: { type: "string", description: "название своего прибора" },
               watts: { type: "number" }, avg: { type: "number" }, start: { type: "number" },
@@ -74,13 +86,21 @@ function selectStations(args, kb) {
   items.forEach((it, i) => {
     if (!it || typeof it !== "object") return;
     let base;
-    if (it.id) {
+    const lookupKey = (it.id || it.name || "").toString().trim().toLowerCase();
+    const resolvedId = LOAD_SYNONYMS[lookupKey] || it.id;
+    if (resolvedId) {
+      const l = kb.loads.find((x) => x.id === resolvedId || x.id.toLowerCase() === resolvedId.toLowerCase() || x.name.toLowerCase() === resolvedId.toLowerCase());
+      if (l) {
+        base = { name: l.name, watts: l.watts == null ? 20 : l.watts, avg: l.avg == null ? (l.watts == null ? 20 : l.watts) : l.avg, start: l.start || 0 };
+      }
+    }
+    if (!base && it.id) {
       const l = kb.loads.find((x) => x.id === it.id);
       if (!l) { errors.push("неизвестный прибор: " + it.id); return; }
       base = { name: l.name, watts: l.watts == null ? 20 : l.watts, avg: l.avg == null ? (l.watts == null ? 20 : l.watts) : l.avg, start: l.start || 0 };
-    } else if (isNum(it.watts) && it.watts >= 0 && it.watts <= 30000) {
+    } else if (!base && isNum(it.watts) && it.watts >= 0 && it.watts <= 30000) {
       base = { name: it.name || "прибор", watts: it.watts, avg: isNum(it.avg) ? it.avg : it.watts, start: isNum(it.start) ? it.start : 0 };
-    } else { errors.push("прибор без id и без watts"); return; }
+    } else if (!base) { errors.push("прибор без id и без watts"); return; }
     const q = clamp(it.qty, 1, 20, 1);
     loads.push({ key: "l" + i, name: base.name, watts: base.watts * q, avg: base.avg * q, start: base.start });
   });

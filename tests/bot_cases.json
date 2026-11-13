@@ -72,6 +72,48 @@
   ]
  },
  {
+  "id": "boiler_floorpump_fridge_tv_6h",
+  "name": "котёл, водяной тёплый пол (насос 60 Вт), холодильник, ТВ на 6 часов",
+  "target": "main",
+  "messages": [
+   {
+    "role": "user",
+    "text": "Нужна станция на 6 часов: газовый котёл, тёплый пол, холодильник и телевизор"
+   }
+  ],
+  "checks": [
+   {
+    "t": "tool_called",
+    "name": "select_stations"
+   },
+   {
+    "t": "cards_min",
+    "n": 1
+   },
+   {
+    "t": "cards_fit",
+    "loads": [
+     "boiler",
+     "floor_pump",
+     "fridge",
+     "tv"
+    ],
+    "hours": 6
+   },
+   {
+    "t": "has",
+    "re": [
+     "насос|тёплый пол|теплый пол|кабель"
+    ]
+   },
+   {
+    "t": "tool_min",
+    "watts": 460,
+    "avg": 320
+   }
+  ]
+ },
+ {
   "id": "split_std_fridge",
   "name": "обычный сплит (большой пуск) + холодильник",
   "target": "main",

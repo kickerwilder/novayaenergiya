@@ -487,10 +487,74 @@ document.getElementById("gl").innerHTML=D.glossary.map(function(g){return '<dt>'
   else setTimeout(function(){load(function(){})},5000);
 })();
 
-/* управление скроллом: открытие строго с начала страницы, если нет хэша */
+/* навигация по якорям, фиксация скролла и открытие строго с начала страницы */
 if ('scrollRestoration' in history) {
   try { history.scrollRestoration = 'manual'; } catch (_) {}
 }
+
+function clearHashUrl() {
+  if (window.history && window.history.replaceState) {
+    try {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    } catch (_) {}
+  }
+}
+
+document.addEventListener("click", function(e) {
+  var a = e.target.closest('a[href^="#"]');
+  if (!a) return;
+  var hash = a.getAttribute("href");
+  if (!hash || hash === "#" || hash === "#top") {
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    clearHashUrl();
+    return;
+  }
+  var target = document.querySelector(hash);
+  if (target) {
+    e.preventDefault();
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    clearHashUrl();
+  }
+});
+
+var brandLogo = document.querySelector(".brand");
+if (brandLogo) {
+  brandLogo.addEventListener("click", function(e) {
+    var href = brandLogo.getAttribute("href");
+    if (!href || href === "#" || href === "index.html" || href === "./" || href === "/") {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      clearHashUrl();
+    }
+  });
+}
+
+function checkInitialScroll() {
+  if (window.location.hash) {
+    var target = document.querySelector(window.location.hash);
+    if (target) {
+      setTimeout(function() {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        clearHashUrl();
+      }, 50);
+      return;
+    }
+  }
+  window.scrollTo(0, 0);
+}
+
+window.addEventListener("pageshow", function() {
+  if (!window.location.hash) {
+    window.scrollTo(0, 0);
+  }
+});
+
+window.addEventListener("load", function() {
+  if (!window.location.hash) {
+    window.scrollTo(0, 0);
+  }
+});
 
 /* плавное скрытие нижней панели контактов на первом экране (Hero) */
 (function(){
@@ -537,7 +601,5 @@ if ('scrollRestoration' in history) {
 })();
 
 buildAcc(); render();
-if (!location.hash) {
-  window.scrollTo(0, 0);
-}
+checkInitialScroll();
 })();
