@@ -30,10 +30,16 @@
   }
   function scrollDown() { logEl.scrollTop = logEl.scrollHeight; }
 
+  function avatar() {
+    var a = el("img", "chat-ava"); a.src = cfg.logo; a.width = 28; a.height = 28; a.alt = "";
+    return a;
+  }
   function addBubble(role, text) {
     var b = el("div", "chat-m " + (role === "user" ? "chat-user" : "chat-bot"));
     String(text).split(/\n+/).forEach(function (line, i) { var p = el("p"); fill(p, line); b.appendChild(p); });
-    logEl.appendChild(b); scrollDown();
+    if (role !== "user" && cfg.logo) { var row = el("div", "chat-row"); row.appendChild(avatar()); row.appendChild(b); logEl.appendChild(row); }
+    else logEl.appendChild(b);
+    scrollDown();
     return b;
   }
   function priceText(c) { return c.price > 0 ? cfg.fmtPrice(c.price) + " с доставкой" : "цена по запросу"; }
@@ -118,7 +124,8 @@
   function build() {
     if (built) return; built = true;
     panel = el("div", "chat"); panel.id = "chatPanel"; panel.setAttribute("role", "dialog"); panel.setAttribute("aria-label", "Чат с консультантом"); panel.hidden = true;
-    var hd = el("div", "chat-hd"); hd.appendChild(el("b", null, "Консультант НОВАЯ ЭНЕРДЖИ"));
+    var hd = el("div", "chat-hd"); var ttl = el("div", "chat-ttl"); if (cfg.logo) { ttl.appendChild(avatar()); panel.classList.add("chat-ava-on"); }
+    ttl.appendChild(el("b", null, "Консультант НОВАЯ ЭНЕРДЖИ")); hd.appendChild(ttl);
     closeBtn = el("button", "chat-x", "×"); closeBtn.type = "button"; closeBtn.setAttribute("aria-label", "Закрыть чат");
     closeBtn.addEventListener("click", function () { close(true); });
     hd.appendChild(closeBtn); panel.appendChild(hd);

@@ -470,7 +470,9 @@ document.getElementById("gl").innerHTML=D.glossary.map(function(g){return '<dt>'
   document.body.classList.add("has-chat");
   var btn=document.createElement("button");
   btn.type="button"; btn.className="chat-fab"; btn.id="chatFab"; btn.setAttribute("aria-haspopup","dialog"); btn.setAttribute("aria-expanded","false"); btn.setAttribute("aria-controls","chatPanel");
-  btn.innerHTML='<svg class="chat-fab-ic" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="currentColor"/></svg><span>Подобрать станцию в чате</span>';
+  var logo=(document.querySelector('link[rel="icon"][type="image/svg+xml"]')||{}).href||"";
+  var icon=logo?'<img class="chat-fab-ic" src="'+logo+'" width="28" height="28" alt="">':'<svg class="chat-fab-ic" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="currentColor"/></svg>';
+  btn.innerHTML=icon+'<span>Подобрать станцию в чате</span>';
   document.body.appendChild(btn);
   var waiting=null;
   function load(cb){
@@ -478,7 +480,7 @@ document.getElementById("gl").innerHTML=D.glossary.map(function(g){return '<dt>'
     if(waiting){waiting.push(cb); return;}
     waiting=[cb];
     var sc=document.createElement("script"); sc.src="assets/chat.js";
-    sc.onload=function(){ window.NEchat.init({url:url,button:btn,goToCode:goToCode,fmtPrice:fmtPrice}); var q=waiting; waiting=null; q.forEach(function(f){f()}); };
+    sc.onload=function(){ window.NEchat.init({url:url,button:btn,goToCode:goToCode,fmtPrice:fmtPrice,logo:logo}); var q=waiting; waiting=null; q.forEach(function(f){f()}); };
     sc.onerror=function(){ waiting=null; btn.hidden=true; };
     document.head.appendChild(sc);
   }

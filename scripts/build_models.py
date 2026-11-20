@@ -376,7 +376,7 @@ def build_page(combo, data, prices, charge, all_combos):
 <body>
 <header class="bar" id="top">
   <div class="wrap bar-in">
-    <a class="brand" href="../index.html" aria-label="{esc(SITE_NAME)} — портативные электростанции, на главную"><span class="brand-n">{esc(SITE_NAME)}</span><span class="brand-s">портативные электростанции</span></a>
+    <a class="brand" href="../index.html" aria-label="{esc(SITE_NAME)} — портативные электростанции, на главную"><img class="brand-logo" src="../favicon.svg?v=2" width="36" height="36" alt=""><span class="brand-t"><span class="brand-n">{esc(SITE_NAME)}</span><span class="brand-s">портативные электростанции</span></span></a>
     <nav class="nav" aria-label="Разделы страницы">
       <a href="../index.html#catalog">Каталог</a>
       <a href="../index.html#picker">Подбор</a>
@@ -417,7 +417,7 @@ def build_page(combo, data, prices, charge, all_combos):
   {related_html}
 
   <footer class="foot">
-    <p class="foot-brand">{esc(SITE_NAME)}</p>
+    <p class="foot-brand"><img class="foot-logo" src="../favicon.svg?v=2" width="32" height="32" alt="">{esc(SITE_NAME)}</p>
     <p class="req"><a href="tel:{PHONE}">{PHONE_TEXT}</a> · <a href="mailto:{EMAIL}">{EMAIL}</a></p>
     <div class="foot-legal">
       <p class="legal-seller"><strong>ИП Воробьёв Александр Павлович</strong> · ИНН 910208709968 · ОГРНИП 326911200011729<br>Республика Крым, г. Симферополь, Евпаторийское шоссе, д. 5Б, офис 1</p>
