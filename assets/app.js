@@ -499,10 +499,50 @@ function motionOK() { return !(window.matchMedia && window.matchMedia("(prefers-
 function clearHashUrl() {
   if (window.history && window.history.replaceState) {
     try {
-      history.replaceState(null, '', window.location.pathname + window.location.search);
+      history.replaceState(history.state, '', window.location.pathname + window.location.search); /* state сохраняем: в нём id записи истории */
     } catch (_) {}
   }
 }
+
+/* Положение прокрутки для «Назад/Вперёд».
+   Браузерное восстановление отключено (scrollRestoration = manual, см. выше), поэтому позицию храним сами:
+   у каждой записи истории свой id (в history.state), позиция лежит в sessionStorage по этому id.
+   Нужна только при навигации back_forward; свежий заход и обновление по-прежнему открываются с начала (или с раздела по хэшу). */
+function navType() {
+  try {
+    var n = performance.getEntriesByType("navigation")[0];
+    if (n && n.type) return n.type;
+  } catch (_) {}
+  try {
+    var t = performance.navigation && performance.navigation.type;
+    return t === 2 ? "back_forward" : (t === 1 ? "reload" : "navigate");
+  } catch (_) {}
+  return "navigate";
+}
+var NAV = navType();
+var entryId = "";
+try {
+  var st = history.state;
+  entryId = (st && typeof st === "object" && st.neId) || "";
+  if (!entryId) {
+    entryId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    history.replaceState(Object.assign({}, (st && typeof st === "object") ? st : {}, { neId: entryId }), "", window.location.href);
+  }
+} catch (_) {}
+function readSavedY() {
+  if (!entryId) return null;
+  try {
+    var v = sessionStorage.getItem("ne_y:" + entryId);
+    if (v === null) return null;
+    v = parseInt(v, 10);
+    return isFinite(v) && v >= 0 ? v : null;
+  } catch (_) { return null; }
+}
+function saveY() {
+  if (!entryId) return;
+  try { sessionStorage.setItem("ne_y:" + entryId, String(Math.round(window.scrollY))); } catch (_) {}
+}
+var holdPos = false; /* true — позицию вернули из сохранённой, «наверх» не трогаем */
 
 document.addEventListener("click", function(e) {
   var a = e.target.closest('a[href^="#"]');
@@ -556,7 +596,41 @@ function hashTarget() {
   try { return document.querySelector(h); } catch (_) { return null; }
 }
 
+function jumpY(y) {
+  var root = document.documentElement, prev = root.style.scrollBehavior;
+  root.style.scrollBehavior = "auto"; /* в CSS включена плавная прокрутка, здесь нужен мгновенный переход */
+  window.scrollTo(0, y);
+  root.style.scrollBehavior = prev;
+}
+
+function watchUserScroll() {
+  var st = { moved: false };
+  function stop() { st.moved = true; }
+  ["wheel", "touchstart", "keydown", "mousedown"].forEach(function(ev) { window.addEventListener(ev, stop, { once: true, passive: true }); });
+  return st;
+}
+
+function afterFullLoad(fn) {
+  var fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+  var loaded = new Promise(function(resolve) {
+    if (document.readyState === "complete") resolve(); else window.addEventListener("load", resolve, { once: true });
+  });
+  Promise.all([fonts, loaded]).then(function() { requestAnimationFrame(fn); });
+}
+
+/* вернуть сохранённую позицию; после полной загрузки один раз поправить, если человек сам не прокручивал */
+function restoreScroll(y) {
+  holdPos = true;
+  var user = watchUserScroll();
+  jumpY(y);
+  afterFullLoad(function() { if (!user.moved && Math.abs(window.scrollY - y) > 1) jumpY(y); });
+}
+
 function checkInitialScroll() {
+  if (NAV === "back_forward") {
+    var saved = readSavedY();
+    if (saved !== null) { restoreScroll(saved); return; }
+  }
   var target = hashTarget();
   if (!target) { window.scrollTo(0, 0); return; }
   var hash = window.location.hash, moved = false;
@@ -572,17 +646,34 @@ function checkInitialScroll() {
   });
 }
 
-window.addEventListener("pageshow", function() {
-  if (!window.location.hash) {
+window.addEventListener("pageshow", function(e) {
+  if (e.persisted) { /* возврат из bfcache: страница уже в нужном месте; если браузер сбросил позицию, вернуть сохранённую */
+    var saved = readSavedY();
+    if (saved !== null && Math.abs(window.scrollY - saved) > 1) jumpY(saved);
+    return;
+  }
+  if (!window.location.hash && !holdPos) {
     window.scrollTo(0, 0);
   }
 });
 
 window.addEventListener("load", function() {
-  if (!window.location.hash) {
+  if (!window.location.hash && !holdPos) {
     window.scrollTo(0, 0);
   }
 });
+
+/* сохранение позиции для «Назад/Вперёд» (начинаем после первого определения стартовой позиции, см. checkInitialScroll) */
+function startSavingScroll() {
+  var ticking = false;
+  window.addEventListener("scroll", function() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function() { ticking = false; saveY(); });
+  }, { passive: true });
+  window.addEventListener("pagehide", saveY);
+  document.addEventListener("visibilitychange", function() { if (document.visibilityState === "hidden") saveY(); });
+}
 
 /* плавное скрытие нижней панели контактов на первом экране (Hero) */
 (function(){
@@ -630,4 +721,5 @@ window.addEventListener("load", function() {
 
 buildAcc(); render();
 checkInitialScroll();
+startSavingScroll();
 })();
