@@ -36,7 +36,7 @@ DESCRIPTION = ("Портативные электростанции 0,8–8 кВ
 OG_IMAGE = "img/og.jpg"
 OG_IMAGE_ALT = "Две портативные электростанции — тёмная и светлая на колёсах — у дачного дома и палатки"
 THEME_COLOR = "#ffffff"
-LOGO = "assets/favicon.svg"
+LOGO = "icon-512.png"
 
 
 def read(p):

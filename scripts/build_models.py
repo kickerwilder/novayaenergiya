@@ -367,7 +367,9 @@ def build_page(combo, data, prices, charge, all_combos):
 <meta property="og:url" content="{esc(canonical)}">
 <meta property="og:image" content="{SITE_URL}{esc(combo['vers'][default_v]['img'])}">
 <meta property="og:locale" content="ru_RU">
-<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../favicon.svg?v=2" type="image/svg+xml">
+<link rel="icon" href="../favicon.ico?v=2" sizes="48x48">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png?v=2">
 <link rel="stylesheet" href="../assets/styles.css">
 <script type="application/ld+json">{json.dumps(prod_ld, ensure_ascii=False, separators=(',', ':'))}</script>
 </head>
