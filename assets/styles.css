@@ -337,6 +337,17 @@ details[open]>summary::before{content:"–"}
   .gl dd{border-top:0;padding-top:2px}
   .frow .lbl{min-width:100%}
 }
+/* ≤550 px: шапка в две строки. 1-я: знак, название и подпись (как были); 2-я: все четыре пункта меню целиком, ровно по ширине.
+   Однострочная шапка перестаёт помещаться на 520 px и уже (с 14-px пунктами меню раньше), брейкпоинт с запасом 30 px. */
+@media (max-width:550px){
+  .bar-in{flex-wrap:wrap;align-items:center;gap:0;min-height:0}
+  .bar .brand{min-height:44px;padding:0}
+  .bar .nav{order:2;flex:0 0 100%;width:100%;margin:0;gap:0;justify-content:space-between}
+  .bar .nav a{flex:none;padding:0 6px;min-height:40px;font-size:14px;white-space:nowrap}
+  .bar .nav a:first-child{padding-left:0}
+  .bar .nav a:last-child{padding-right:0}
+  .sec,.card{scroll-margin-top:112px} /* шапка выросла до двух строк (≈ 85 px) + 8 + 16 (сдвиг .reveal) */
+}
 .toast{position:fixed;left:50%;bottom:24px;z-index:30;max-width:calc(100vw - 32px);padding:12px 18px;border-radius:8px;background:var(--ink);color:#fff;font:600 14.5px/1.35 var(--body);text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.25);opacity:0;transform:translate(-50%,12px);pointer-events:none;transition:opacity .25s ease,transform .25s ease}
 .toast.on{opacity:1;transform:translate(-50%,0)}
 /* чат-консультант */
