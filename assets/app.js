@@ -494,6 +494,8 @@ if ('scrollRestoration' in history) {
   try { history.scrollRestoration = 'manual'; } catch (_) {}
 }
 
+function motionOK() { return !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+
 function clearHashUrl() {
   if (window.history && window.history.replaceState) {
     try {
@@ -508,14 +510,14 @@ document.addEventListener("click", function(e) {
   var hash = a.getAttribute("href");
   if (!hash || hash === "#" || hash === "#top") {
     e.preventDefault();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: motionOK() ? "smooth" : "auto" });
     clearHashUrl();
     return;
   }
   var target = document.querySelector(hash);
   if (target) {
     e.preventDefault();
-    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    target.scrollIntoView({ behavior: motionOK() ? "smooth" : "auto", block: "start" });
     clearHashUrl();
   }
 });
@@ -526,24 +528,48 @@ if (brandLogo) {
     var href = brandLogo.getAttribute("href");
     if (!href || href === "#" || href === "index.html" || href === "./" || href === "/") {
       e.preventDefault();
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, behavior: motionOK() ? "smooth" : "auto" });
       clearHashUrl();
     }
   });
 }
 
-function checkInitialScroll() {
-  if (window.location.hash) {
-    var target = document.querySelector(window.location.hash);
-    if (target) {
-      setTimeout(function() {
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
-        clearHashUrl();
-      }, 50);
-      return;
-    }
+/* Открытие страницы.
+   Без хэша (обычный заход, обновление) — с самого начала.
+   С хэшем раздела (например, переход с privacy.html или страницы модели по index.html#faq) — сразу к разделу, без анимации:
+   позиция учитывает липкую шапку через scroll-margin-top секции. Хэш в адресе остаётся. Раздел строится до этого вызова (render()),
+   а после загрузки шрифтов и изображений позиция один раз подправляется, если человек за это время сам не прокручивал страницу. */
+function jumpTo(target) {
+  try {
+    target.scrollIntoView({ behavior: "instant", block: "start" });
+  } catch (_) {
+    var root = document.documentElement, prev = root.style.scrollBehavior;
+    root.style.scrollBehavior = "auto";
+    target.scrollIntoView(true);
+    root.style.scrollBehavior = prev;
   }
-  window.scrollTo(0, 0);
+}
+
+function hashTarget() {
+  var h = window.location.hash;
+  if (!h || h.length < 2) return null;
+  try { return document.querySelector(h); } catch (_) { return null; }
+}
+
+function checkInitialScroll() {
+  var target = hashTarget();
+  if (!target) { window.scrollTo(0, 0); return; }
+  var hash = window.location.hash, moved = false;
+  function stop() { moved = true; }
+  ["wheel", "touchstart", "keydown", "mousedown"].forEach(function(ev) { window.addEventListener(ev, stop, { once: true, passive: true }); });
+  jumpTo(target);
+  var fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+  var loaded = new Promise(function(resolve) {
+    if (document.readyState === "complete") resolve(); else window.addEventListener("load", resolve, { once: true });
+  });
+  Promise.all([fonts, loaded]).then(function() {
+    requestAnimationFrame(function() { if (!moved && window.location.hash === hash) jumpTo(target); }); /* один раз после полной загрузки */
+  });
 }
 
 window.addEventListener("pageshow", function() {
