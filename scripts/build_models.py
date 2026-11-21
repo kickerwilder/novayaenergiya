@@ -155,8 +155,9 @@ def build_page(combo, data, prices, charge, all_combos):
     uniform_art = groups[0][0] if len(groups) == 1 else None
     # артикул в title — только если он одинаков у всех версий страницы
     page_title = "%s %s%s — цена | %s" % (NAMING["formal"], (uniform_art + " ") if uniform_art else "", pc, SITE_NAME)
+    desc_first = f"{NAMING['formal']} {num(power)} Вт, {num(cap)} Вт·ч ({kwh} кВт·ч) на LiFePO4 с чистой синусоидой."
     meta_desc = (
-        f"{NAMING['formal']} {num(power)} Вт, {num(cap)} Вт·ч ({kwh} кВт·ч) на LiFePO4 с чистой синусоидой. "
+        desc_first + " "
         f"Работает как {NAMING['search_phrase']} и {NAMING['search_phrase_2']}: время работы приборов, характеристики, цена с доставкой в Россию."
     )
     canonical = f"{SITE_URL}models/{slug}.html"
@@ -181,7 +182,7 @@ def build_page(combo, data, prices, charge, all_combos):
             "sku": art,
             "mpn": art,
             "brand": {"@type": "Brand", "name": SITE_NAME},
-            "description": meta_desc,
+            "description": desc_first,  # поисковые формулировки в JSON-LD только в alternateName
             "image": f"{SITE_URL}{combo['vers'][keys[0]]['img']}",
             "additionalProperty": [
                 {"@type": "PropertyValue", "name": "Номинальная мощность", "value": power, "unitCode": "WTT", "unitText": "Вт"},
