@@ -494,6 +494,7 @@ body.has-chat .to-top{bottom:76px;right:20px}
 
 .model-header{margin:10px 0 24px}
 .model-header h1{margin:0 0 8px;font:700 clamp(24px,3.8vw,38px)/1.1 var(--head);letter-spacing:-.02em}
+.model-header .lead{margin:0 0 12px;color:var(--muted);font-size:16.5px;max-width:68ch}
 .model-meta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:14.5px;color:var(--muted)}
 .model-meta .badge{display:inline-flex;padding:3px 10px;border-radius:6px;background:var(--cool);color:var(--ink);font-weight:600;font-size:13px}
 

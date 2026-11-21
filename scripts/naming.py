@@ -51,6 +51,38 @@ def combo_title(naming, power, cap):
     return "%s %s" % (cap_first(naming["neutral"]), power_cap(power, cap))
 
 
+def article_groups(combo):
+    """[(артикул, [ключи версий])] в порядке D, L; версии с одинаковым артикулом объединяются.
+
+    Артикул берётся из поля article версии как есть (data/catalog.js, scripts/add_articles.py).
+    """
+    groups = []
+    for k in ("D", "L"):
+        v = combo["vers"].get(k)
+        if not v:
+            continue
+        art = v.get("article")
+        if not art:
+            raise SystemExit("У версии %s нет артикула: запустите python scripts/add_articles.py" % v["code"])
+        for g in groups:
+            if g[0] == art:
+                g[1].append(k)
+                break
+        else:
+            groups.append((art, [k]))
+    return groups
+
+
+def product_name(naming, brand, article):
+    """name для JSON-LD Product: «Внешний аккумулятор (портативная зарядная станция) НОВАЯ ЭНЕРДЖИ ZF28-2003.8»."""
+    return "%s %s %s" % (naming["formal"], brand, article)
+
+
+def alternate_name(naming, power, cap):
+    """alternateName для JSON-LD Product: «Портативная электростанция 2 800 Вт · 3,8 кВт·ч» (поисковое название)."""
+    return "%s %s" % (cap_first(naming["search_phrase"]), power_cap(power, cap))
+
+
 def fill_tokens(text, naming=None):
     """Подставляет {ключ} из naming.json (для scripts/faq.json)."""
     naming = naming or load()

@@ -8,6 +8,11 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import naming as nm  # noqa: E402
+
+NAMING = nm.load()  # единственный источник наименований товара: data/naming.json
+
 ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = ROOT / "models"
 MODELS_DIR.mkdir(exist_ok=True)
@@ -144,11 +149,15 @@ def build_page(combo, data, prices, charge, all_combos):
     power = combo["power"]
     cap = combo["cap"]
     kwh = dec(cap / 1000)
-    title = f"Электростанция {num(power)} Вт · {kwh} кВт·ч"
-    page_title = f"Портативная электростанция {num(power)} Вт · {kwh} кВт·ч на LiFePO4 — купить, цены | {SITE_NAME}"
+    title = combo["title"]  # «Станция 2 800 Вт · 3,8 кВт·ч» (задаётся scripts/build_naming.py)
+    pc = nm.power_cap(power, cap)
+    groups = nm.article_groups(combo)  # [(артикул, [ключи версий])]; больше одного, если у D и L артикулы разные
+    uniform_art = groups[0][0] if len(groups) == 1 else None
+    # артикул в title — только если он одинаков у всех версий страницы
+    page_title = "%s %s%s — цена | %s" % (NAMING["formal"], (uniform_art + " ") if uniform_art else "", pc, SITE_NAME)
     meta_desc = (
-        f"Портативная электростанция {num(power)} Вт, {num(cap)} Вт·ч ({kwh} кВт·ч) на LiFePO4 аккумуляторах "
-        f"с чистой синусоидой. Время работы бытовых приборов, характеристики, цена с доставкой в Россию."
+        f"{NAMING['formal']} {num(power)} Вт, {num(cap)} Вт·ч ({kwh} кВт·ч) на LiFePO4 с чистой синусоидой. "
+        f"Работает как {NAMING['search_phrase']} и {NAMING['search_phrase_2']}: время работы приборов, характеристики, цена с доставкой в Россию."
     )
     canonical = f"{SITE_URL}models/{slug}.html"
 
@@ -161,7 +170,44 @@ def build_page(combo, data, prices, charge, all_combos):
     valid_prices = [p for p in prices_list if p > 0]
     min_price = min(valid_prices) if valid_prices else 0
 
-    # JSON-LD
+    # JSON-LD: Product по одному на каждый артикул (у D и L артикул обычно общий, тогда Product один)
+    products_ld = []
+    for art, keys in groups:
+        g_prices = [p for p in (prices.get(combo["vers"][k]["code"], 0) for k in keys) if p > 0]
+        node = {
+            "@type": "Product",
+            "name": nm.product_name(NAMING, SITE_NAME, art),
+            "alternateName": nm.alternate_name(NAMING, power, cap),
+            "sku": art,
+            "mpn": art,
+            "brand": {"@type": "Brand", "name": SITE_NAME},
+            "description": meta_desc,
+            "image": f"{SITE_URL}{combo['vers'][keys[0]]['img']}",
+            "additionalProperty": [
+                {"@type": "PropertyValue", "name": "Номинальная мощность", "value": power, "unitCode": "WTT", "unitText": "Вт"},
+                {"@type": "PropertyValue", "name": "Ёмкость", "value": cap, "unitCode": "WHR", "unitText": "Вт·ч"},
+                {"@type": "PropertyValue", "name": "Пиковая мощность", "value": 2 * power, "unitCode": "WTT", "unitText": "Вт"},
+                {"@type": "PropertyValue", "name": "Тип батареи", "value": "LiFePO4"},
+            ],
+        }
+        if g_prices:
+            if len(g_prices) > 1 and min(g_prices) != max(g_prices):
+                node["offers"] = {
+                    "@type": "AggregateOffer",
+                    "priceCurrency": "RUB",
+                    "lowPrice": min(g_prices),
+                    "highPrice": max(g_prices),
+                    "offerCount": len(g_prices),
+                    "availability": "https://schema.org/PreOrder",
+                }
+            else:
+                node["offers"] = {
+                    "@type": "Offer",
+                    "priceCurrency": "RUB",
+                    "price": g_prices[0],
+                    "availability": "https://schema.org/PreOrder",
+                }
+        products_ld.append(node)
     prod_ld = {
         "@context": "https://schema.org",
         "@graph": [
@@ -169,43 +215,12 @@ def build_page(combo, data, prices, charge, all_combos):
                 "@type": "BreadcrumbList",
                 "itemListElement": [
                     {"@type": "ListItem", "position": 1, "name": "Главная", "item": SITE_URL},
-                    {"@type": "ListItem", "position": 2, "name": "Каталог электростанций", "item": f"{SITE_URL}#catalog"},
+                    {"@type": "ListItem", "position": 2, "name": NAMING["catalog_crumb"], "item": f"{SITE_URL}#catalog"},
                     {"@type": "ListItem", "position": 3, "name": title, "item": canonical},
                 ],
             },
-            {
-                "@type": "Product",
-                "name": f"Портативная электростанция {num(power)} Вт · {kwh} кВт·ч",
-                "sku": cid,
-                "brand": {"@type": "Brand", "name": SITE_NAME},
-                "description": meta_desc,
-                "image": f"{SITE_URL}{combo['vers'][default_v]['img']}",
-                "additionalProperty": [
-                    {"@type": "PropertyValue", "name": "Номинальная мощность", "value": power, "unitCode": "WTT", "unitText": "Вт"},
-                    {"@type": "PropertyValue", "name": "Ёмкость", "value": cap, "unitCode": "WHR", "unitText": "Вт·ч"},
-                    {"@type": "PropertyValue", "name": "Пиковая мощность", "value": 2 * power, "unitCode": "WTT", "unitText": "Вт"},
-                    {"@type": "PropertyValue", "name": "Тип батареи", "value": "LiFePO4"},
-                ],
-            },
-        ],
+        ] + products_ld,
     }
-    if valid_prices:
-        if has_two and len(valid_prices) > 1 and min(valid_prices) != max(valid_prices):
-            prod_ld["@graph"][1]["offers"] = {
-                "@type": "AggregateOffer",
-                "priceCurrency": "RUB",
-                "lowPrice": min(valid_prices),
-                "highPrice": max(valid_prices),
-                "offerCount": len(valid_prices),
-                "availability": "https://schema.org/PreOrder",
-            }
-        else:
-            prod_ld["@graph"][1]["offers"] = {
-                "@type": "Offer",
-                "priceCurrency": "RUB",
-                "price": valid_prices[0],
-                "availability": "https://schema.org/PreOrder",
-            }
 
     # Переключатель корпусов
     switch_html = ""
@@ -245,7 +260,8 @@ def build_page(combo, data, prices, charge, all_combos):
         ch_text = charge_text_for(cap, ch_info)
 
         # Таблица характеристик
-        specs_rows = "".join(f"<tr><th>{esc(r[0])}</th><td>{esc(r[1])}</td></tr>" for r in v_obj["rows"])
+        specs_rows = f"<tr><th>Артикул (модель по документам)</th><td>{esc(v_obj['article'])}</td></tr>" + "".join(
+            f"<tr><th>{esc(r[0])}</th><td>{esc(r[1])}</td></tr>" for r in v_obj["rows"])
 
         # Порты
         legend_items = "".join(f"<li><b>{g['n']}</b><span>{esc(g['ru'])}</span></li>" for g in v_obj["legend"])
@@ -266,7 +282,7 @@ def build_page(combo, data, prices, charge, all_combos):
             f'    <div class="model-buy">'
             f'      <div class="model-price">{p_html}</div>'
             f'      <div class="model-buy-meta">'
-            f'        <div>Артикул: <strong>{esc(code)}</strong></div>'
+            f'        <div>Код на сайте: <strong>{esc(code)}</strong></div>'
             f'        <div>Корпус: <strong>{esc(data["versions"][k]["name"])}</strong> ({esc(v_obj["design"])})</div>'
             f'        <div>Розетки 220 В: <strong>{esc(sock_text)}</strong></div>'
             f'        <div>Гарантия: <strong>6 месяцев</strong> (продление до 12 мес: +10 000 ₽)</div>'
@@ -309,7 +325,7 @@ def build_page(combo, data, prices, charge, all_combos):
         )
     rt_table_html = (
         f'<section class="model-sec">'
-        f'  <h2>Что и сколько часов будет работать от этой электростанции</h2>'
+        f'  <h2>Что и сколько часов будет работать от этой станции</h2>'
         f'  <p class="lead">Расчёт автономной работы приборов от ёмкости {num(cap)} Вт·ч с учётом КПД инвертора 85 % и номинальной мощности {num(power)} Вт:</p>'
         f'  <div class="table-wrap">'
         f'    <table class="rt-table">'
@@ -350,6 +366,15 @@ def build_page(combo, data, prices, charge, all_combos):
         f'</section>'
     )
 
+    # Чип с артикулом под H1: если у корпусов артикулы разные, по чипу на корпус, переключаются вместе с корпусом (как панели и цена)
+    chip_label = "Артикул (модель по документам): "
+    if len(groups) == 1:
+        art_chips = f'<span class="badge art-chip">{chip_label}{esc(groups[0][0])}</span>'
+    else:
+        art_chips = "".join(
+            f'<span class="badge art-chip" data-v="{k}"' + ("" if k == default_v else ' style="display:none"') + f'>{chip_label}{esc(combo["vers"][k]["article"])}</span>'
+            for k in vers_keys)
+
     # Сборка финального HTML
     doc = f"""<!DOCTYPE html>
 <html lang="ru">
@@ -376,7 +401,7 @@ def build_page(combo, data, prices, charge, all_combos):
 <body>
 <header class="bar" id="top">
   <div class="wrap bar-in">
-    <a class="brand" href="../index.html" aria-label="{esc(SITE_NAME)} — портативные электростанции, на главную"><img class="brand-logo" src="../favicon.svg?v=2" width="36" height="36" alt=""><span class="brand-t"><span class="brand-n">{esc(SITE_NAME)}</span><span class="brand-s">портативные электростанции</span></span></a>
+    <a class="brand" href="../index.html" aria-label="{esc(SITE_NAME)} — на главную"><img class="brand-logo" src="../favicon.svg?v=2" width="36" height="36" alt=""><span class="brand-t"><span class="brand-n">{esc(SITE_NAME)}</span><span class="brand-s">{esc(NAMING['tagline'])}</span></span></a>
     <nav class="nav" aria-label="Разделы страницы">
       <a href="../index.html#catalog">Каталог</a>
       <a href="../index.html#picker">Подбор</a>
@@ -395,14 +420,16 @@ def build_page(combo, data, prices, charge, all_combos):
   <nav class="breadcrumbs" aria-label="Хлебные крошки">
     <a href="../index.html">Главная</a>
     <span class="bc-sep">/</span>
-    <a href="../index.html#catalog">Каталог</a>
+    <a href="../index.html#catalog">{esc(NAMING['catalog_crumb'])}</a>
     <span class="bc-sep">/</span>
     <span>{esc(title)}</span>
   </nav>
 
   <div class="model-header">
-    <h1>Портативная электростанция {num(power)} Вт · {kwh} кВт·ч</h1>
+    <h1>{esc(NAMING['formal'])} {esc(SITE_NAME)} {num(power)} Вт · {kwh} кВт·ч</h1>
+    <p class="lead">Работает как {esc(NAMING['search_phrase'])}: резервное питание для дома, дачи и кемпинга</p>
     <div class="model-meta">
+      {art_chips}
       <span class="badge">{esc(combo["group"])}</span>
       <span>LiFePO4 аккумулятор</span>
       <span>Чистая синусоида 220 В</span>
@@ -449,6 +476,9 @@ def build_page(combo, data, prices, charge, all_combos):
       btns.forEach(function(b){{ b.classList.toggle("active", b === btn); }});
       document.querySelectorAll(".v-pane").forEach(function(p){{
         p.style.display = (p.id === "pane-" + target) ? "" : "none";
+      }});
+      document.querySelectorAll(".art-chip[data-v]").forEach(function(c){{
+        c.style.display = (c.getAttribute("data-v") === target) ? "" : "none";
       }});
     }});
   }});

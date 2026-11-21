@@ -21,6 +21,11 @@ import sys
 from datetime import date
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import naming as nm  # noqa: E402
+
+NAMING = nm.load()  # единственный источник наименований товара: data/naming.json
+
 SITE_URL = "https://novaya-energy.ru/"  # со слэшем на конце
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -30,11 +35,13 @@ SITE_NAME = "НОВАЯ ЭНЕРДЖИ"
 PHONE = "+79787280002"
 PHONE_TEXT = "+7 978 728-00-02"
 EMAIL = "apv0050@gmail.com"
-TITLE = "Портативные электростанции LiFePO4 — цены | НОВАЯ ЭНЕРДЖИ"
-DESCRIPTION = ("Портативные электростанции 0,8–8 кВт, 1,5–23 кВт·ч на LiFePO4 с чистой синусоидой. "
-               "Подбор по приборам, время работы, цены с доставкой в Россию.")
+TITLE = "%s LiFePO4 — цены | %s" % (nm.cap_first(NAMING["tagline"]), SITE_NAME)
+# первое предложение — наименование товара; второе — поисковые формулировки (разрешены только здесь, см. data/naming.json)
+DESCRIPTION = ("%s 0,8–8 кВт, 1,5–23 кВт·ч на LiFePO4 с чистой синусоидой. "
+               "Работают как %s и %s: подбор по приборам, время работы, цены с доставкой в Россию."
+               % (NAMING["formal_plural"], NAMING["search_phrase"], NAMING["search_phrase_2"]))
 OG_IMAGE = "img/og.jpg"
-OG_IMAGE_ALT = "Две портативные электростанции — тёмная и светлая на колёсах — у дачного дома и палатки"
+OG_IMAGE_ALT = "Две станции — тёмная и светлая на колёсах — у дачного дома и палатки"
 THEME_COLOR = "#ffffff"
 LOGO = "icon-512.png"
 
@@ -69,32 +76,36 @@ def load_data():
 
 
 def build_products(data, prices):
+    """Product в JSON-LD: по одному на каждый артикул комбинации (у D и L артикул обычно общий, тогда Product один)."""
     items, priced, unpriced = [], 0, 0
     for c in data["combos"]:
-        vers = [c["vers"][k] for k in ("D", "L") if k in c["vers"]]
-        ps = [prices.get(v["code"], 0) for v in vers]
-        ps = [p for p in ps if p > 0]
         kwh = dec(c["cap"] / 1000)
-        node = {
-            "@type": "Product",
-            "name": "Портативная электростанция %s Вт · %s кВт·ч" % (num(c["power"]), kwh),
-            "sku": c["id"],
-            "brand": {"@type": "Brand", "name": SITE_NAME},
-            "description": ("Портативная электростанция на литий-железо-фосфатных батареях (LiFePO4): номинальная мощность %s Вт, "
-                            "ёмкость %s Вт·ч (%s кВт·ч), чистая синусоида.") % (num(c["power"]), num(c["cap"]), kwh),
-            "image": abs_url(vers[0]["img"]),
-            "additionalProperty": [
-                {"@type": "PropertyValue", "name": "Номинальная мощность", "value": c["power"], "unitCode": "WTT", "unitText": "Вт"},
-                {"@type": "PropertyValue", "name": "Ёмкость", "value": c["cap"], "unitCode": "WHR", "unitText": "Вт·ч"},
-            ],
-        }
-        if ps:  # цена «по запросу» (0) в разметку не попадает
-            node["offers"] = {"@type": "AggregateOffer", "priceCurrency": "RUB", "lowPrice": min(ps), "highPrice": max(ps),
-                              "offerCount": len(ps), "availability": "https://schema.org/PreOrder"}
-            priced += 1
-        else:
-            unpriced += 1
-        items.append(node)
+        for art, keys in nm.article_groups(c):
+            vers = [c["vers"][k] for k in keys]
+            ps = [prices.get(v["code"], 0) for v in vers]
+            ps = [p for p in ps if p > 0]
+            node = {
+                "@type": "Product",
+                "name": nm.product_name(NAMING, SITE_NAME, art),
+                "alternateName": nm.alternate_name(NAMING, c["power"], c["cap"]),
+                "sku": art,
+                "mpn": art,
+                "brand": {"@type": "Brand", "name": SITE_NAME},
+                "description": ("%s на литий-железо-фосфатных батареях (LiFePO4): номинальная мощность %s Вт, "
+                                "ёмкость %s Вт·ч (%s кВт·ч), чистая синусоида.") % (NAMING["short"], num(c["power"]), num(c["cap"]), kwh),
+                "image": abs_url(vers[0]["img"]),
+                "additionalProperty": [
+                    {"@type": "PropertyValue", "name": "Номинальная мощность", "value": c["power"], "unitCode": "WTT", "unitText": "Вт"},
+                    {"@type": "PropertyValue", "name": "Ёмкость", "value": c["cap"], "unitCode": "WHR", "unitText": "Вт·ч"},
+                ],
+            }
+            if ps:  # цена «по запросу» (0) в разметку не попадает
+                node["offers"] = {"@type": "AggregateOffer", "priceCurrency": "RUB", "lowPrice": min(ps), "highPrice": max(ps),
+                                  "offerCount": len(ps), "availability": "https://schema.org/PreOrder"}
+                priced += 1
+            else:
+                unpriced += 1
+            items.append(node)
     return items, priced, unpriced
 
 
@@ -187,10 +198,11 @@ def write_if_changed(path, text):
 
 def main():
     assert len(TITLE) <= 60, "title длиннее 60 символов: %d" % len(TITLE)
-    assert len(DESCRIPTION) <= 160, "description длиннее 160 символов: %d" % len(DESCRIPTION)
+    assert len(DESCRIPTION) <= 240, "description длиннее 240 символов: %d" % len(DESCRIPTION)
     assert SITE_URL.endswith("/")
     data, prices = load_data()
-    faq = json.loads(read(ROOT / "scripts" / "faq.json"))
+    faq = [{"q": nm.fill_tokens(f["q"], NAMING), "a": nm.fill_tokens(f["a"], NAMING)}
+           for f in json.loads(read(ROOT / "scripts" / "faq.json"))]
     assert all(f.get("q") and f.get("a") for f in faq)
     combos = data["combos"]
     # описание в <meta> написано вручную: следим, чтобы оно не разошлось с каталогом
@@ -214,7 +226,7 @@ def main():
 
     # lastmod меняется только когда поменялись данные: хэш входных файлов хранится в комментарии
     h = hashlib.sha256()
-    for f in ("data/catalog.js", "data/prices.js", "scripts/faq.json"):
+    for f in ("data/catalog.js", "data/prices.js", "scripts/faq.json", "data/naming.json"):
         h.update(read(ROOT / f).replace("\r\n", "\n").encode("utf-8"))
     digest = h.hexdigest()[:16]
     sm_path = ROOT / "sitemap.xml"
