@@ -261,7 +261,7 @@ def build_page(combo, data, prices, charge, all_combos):
         ch_text = charge_text_for(cap, ch_info)
 
         # Таблица характеристик
-        specs_rows = f"<tr><th>Артикул (модель по документам)</th><td>{esc(v_obj['article'])}</td></tr>" + "".join(
+        specs_rows = f"<tr><th>Артикул</th><td>{esc(v_obj['article'])}</td></tr>" + "".join(
             f"<tr><th>{esc(r[0])}</th><td>{esc(r[1])}</td></tr>" for r in v_obj["rows"])
 
         # Порты
@@ -368,7 +368,7 @@ def build_page(combo, data, prices, charge, all_combos):
     )
 
     # Чип с артикулом под H1: если у корпусов артикулы разные, по чипу на корпус, переключаются вместе с корпусом (как панели и цена)
-    chip_label = "Артикул (модель по документам): "
+    chip_label = "Артикул: "
     if len(groups) == 1:
         art_chips = f'<span class="badge art-chip">{chip_label}{esc(groups[0][0])}</span>'
     else:

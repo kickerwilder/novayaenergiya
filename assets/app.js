@@ -274,7 +274,7 @@ function cardHtml(c,S,open){
    '<div class="main">'+
      '<div class="pic"><div class="ph"><img src="'+V.img+'" alt="'+esc(bodyAlt(V,v)+': '+c.title)+'" loading="lazy" width="1200" height="896"></div>'+seg+'</div>'+
      '<div class="info"><p class="grp">'+esc(c.group)+' · '+esc(V.design)+'</p>'+
-       '<div class="hd"><h3>'+esc(c.title)+'</h3><span class="code" title="Артикул (модель по документам)">Артикул '+esc(V.article)+'</span></div>'+sp+l2+
+       '<div class="hd"><h3>'+esc(c.title)+'</h3><span class="code">Артикул '+esc(V.article)+'</span></div>'+sp+l2+
        '<div class="tags">'+tags+'</div></div>'+
      '<div class="side">'+side+'</div>'+
    '</div>'+

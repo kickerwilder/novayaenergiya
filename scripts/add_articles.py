@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import catalog_io  # noqa: E402
 
-# код версии -> артикул (модель по документам)
+# код версии -> артикул
 ARTICLES = {
     # тёмный корпус (D), 22 версии
     "Z800-1500-D": "ZF08-2001.5",
