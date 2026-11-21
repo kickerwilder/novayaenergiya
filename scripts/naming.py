@@ -84,9 +84,17 @@ def alternate_name(naming, power, cap):
 
 
 def fill_tokens(text, naming=None):
-    """Подставляет {ключ} из naming.json (для scripts/faq.json)."""
+    """Подставляет {ключ} из naming.json (для scripts/faq.json); {ключ:lower} — с маленькой первой буквой (внутри предложения)."""
     naming = naming or load()
-    return re.sub(r"\{(\w+)\}", lambda m: naming[m.group(1)] if m.group(1) in naming else m.group(0), text)
+
+    def repl(m):
+        key, mod = m.group(1), m.group(2)
+        if key not in naming:
+            return m.group(0)
+        v = naming[key]
+        return v[:1].lower() + v[1:] if mod else v
+
+    return re.sub(r"\{(\w+)(?::(lower))?\}", repl, text)
 
 
 def computed(key, naming):

@@ -80,13 +80,13 @@ function cardsFrom(toolLog) {
   const sel = toolLog.filter((t) => t.name === "select_stations" && t.result && t.result.options).pop();
   if (sel) {
     return sel.result.options.filter((o) => o.fits_power && o.fits_peak).slice(0, 3).map((o) => ({
-      code: o.code, title: o.title, power: o.power_w, cap: o.cap_wh, price: o.price_rub, hours: o.hours_text,
+      code: o.code, article: o.article, title: o.title, power: o.power_w, cap: o.cap_wh, price: o.price_rub, hours: o.hours_text,
       note: o.kind + (o.notes && o.notes[0] && !o.fits_power ? ": " + o.notes[0] : ""),
     }));
   }
   const out = [];
   toolLog.filter((t) => t.name === "get_station" && t.result && t.result.stations).forEach((t) => {
-    t.result.stations.forEach((s) => { if (out.length < 3 && !out.some((c) => c.code === s.code)) out.push({ code: s.code, title: s.title, power: s.power_w, cap: s.cap_wh, price: s.price_rub, hours: null, note: s.body }); });
+    t.result.stations.forEach((s) => { if (out.length < 3 && !out.some((c) => c.code === s.code)) out.push({ code: s.code, article: s.article, title: s.title, power: s.power_w, cap: s.cap_wh, price: s.price_rub, hours: null, note: s.body }); });
   });
   return out;
 }

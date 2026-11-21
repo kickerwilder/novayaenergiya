@@ -48,7 +48,7 @@
     var wrap = el("div", "chat-cards");
     cards.forEach(function (c) {
       var card = el("div", "chat-card");
-      card.appendChild(el("b", "cc-t", c.title + " · " + c.code));
+      card.appendChild(el("b", "cc-t", c.title + " · " + (c.article || c.code)));
       card.appendChild(el("span", "cc-s", c.power.toLocaleString("ru-RU") + " Вт · " + (c.cap / 1000).toLocaleString("ru-RU") + " кВт·ч" + (c.hours ? " · " + c.hours : "")));
       card.appendChild(el("span", "cc-p", priceText(c)));
       if (c.note) card.appendChild(el("span", "cc-n", c.note));

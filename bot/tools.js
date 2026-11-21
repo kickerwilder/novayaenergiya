@@ -73,7 +73,7 @@ function option(kind, e, S, hoursWanted, kb) {
   if (e.fitsPower && st.maxSocket_w && S.t > st.maxSocket_w) notes.push("нагрузка больше предела одной розетки (до " + st.maxSocket_w + " Вт): включайте приборы в разные розетки");
   if (S.avg > 0 && S.avg <= 100) notes.push("нагрузка малая: собственное потребление станции (до 50 Вт, по паспорту изделия) уменьшает реальное время");
   return {
-    kind, code: st.code, title: st.title, body: st.bodyName, power_w: st.power_w, power_kw: st.power_w / 1000, peak_w: st.peak_w, cap_wh: st.cap_wh, cap_kwh: Math.round(st.cap_wh / 100) / 10,
+    kind, code: st.code, article: st.article, title: st.title, body: st.bodyName, power_w: st.power_w, power_kw: st.power_w / 1000, peak_w: st.peak_w, cap_wh: st.cap_wh, cap_kwh: Math.round(st.cap_wh / 100) / 10,
     price_rub: st.price_rub, price_note: st.price_rub ? "цена с доставкой" : "цена по запросу",
     hours: Math.round(e.hours * 10) / 10, hours_text: C.hoursText(e.hours),
     fits_power: e.fitsPower, fits_peak: e.fitsPeak, meets_time: hoursWanted ? e.meetsTime : null, notes,
@@ -171,7 +171,7 @@ function stationFacts(st, kb) {
     result: (c.power < l.watts || (l.start && C.peakOf(c) < l.start)) ? "не потянет" : C.hoursText(c.cap * kb.eff / l.avg),
   }));
   return {
-    code: st.code, title: st.title, body: st.bodyName, group: st.group,
+    code: st.code, article: st.article, title: st.title, body: st.bodyName, group: st.group,
     power_w: st.power_w, power_kw: st.power_w / 1000, peak_w: st.peak_w, cap_wh: st.cap_wh, cap_kwh: Math.round(st.cap_wh / 100) / 10,
     price_rub: st.price_rub, price_note: st.price_rub ? "цена с доставкой" : "цена по запросу",
     max_socket_w: st.maxSocket_w,

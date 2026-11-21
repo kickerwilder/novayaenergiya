@@ -14,6 +14,11 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import naming as nm  # noqa: E402
+
+NAMING = nm.load()  # единственный источник наименований товара: data/naming.json
+
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "kb.json"
 SITE_URL = None  # берётся из build_seo.py, чтобы адрес был в одном месте
@@ -21,6 +26,7 @@ SITE_URL = None  # берётся из build_seo.py, чтобы адрес бы�
 CONTACTS = {"phone": "+7 978 728-00-02", "email": "apv0050@gmail.com"}
 
 RULES = [
+    "Официальное наименование товара — «%s». В разговоре говори «станция». У каждой станции есть артикул (поле article, вида ZF…, модель по документам): называй его рядом с мощностью и ёмкостью и пиши ровно так, как в данных (ZF16-2005 и ZF16-2005.0 — разные артикулы)." % NAMING["formal"],
     "Гарантия 6 месяцев. Продление до 12 месяцев — плюс 10 000 ₽ к стоимости станции. Основная цена не меняется.",
     "Срок доставки в Россию — около 25 дней (ориентировочно). Цена на сайте указана с доставкой. Других сроков не обещать.",
     "Класс защиты корпуса IP20: станцию использовать только в помещении или под навесом, где на неё не попадают дождь и брызги. Под дождём нельзя.",
@@ -94,7 +100,7 @@ def build():
             else:
                 charge_info = {"basis": "none"}
             st = {
-                "code": v["code"], "combo": c["id"], "body": k, "bodyName": data["versions"][k]["name"],
+                "code": v["code"], "article": v["article"], "combo": c["id"], "body": k, "bodyName": data["versions"][k]["name"],
                 "title": c["title"], "group": c["group"],
                 "power_w": c["power"], "peak_w": 2 * c["power"], "cap_wh": c["cap"],
                 "price_rub": prices.get(v["code"], 0),
@@ -111,10 +117,12 @@ def build():
     for l in data["loads"]:
         d = {"id": l["key"], "name": l["name"], "watts": l["watts"], "avg": l.get("avg", l["watts"]), "start": l.get("start", 0)}
         loads.append(d)
-    faq = json.loads(read(ROOT / "scripts" / "faq.json"))
+    faq = [{"q": nm.fill_tokens(f["q"], NAMING), "a": nm.fill_tokens(f["a"], NAMING)}
+           for f in json.loads(read(ROOT / "scripts" / "faq.json"))]
     kb = {
         "version": 1,
         "site_url": site_url(),
+        "naming": {"formal": NAMING["formal"], "short": NAMING["short"], "neutral": NAMING["neutral"]},
         "contacts": CONTACTS,
         "currency": "RUB",
         "price_note": "Цена указана с доставкой. 0 = цена по запросу.",
