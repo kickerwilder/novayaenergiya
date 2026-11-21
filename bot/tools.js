@@ -45,8 +45,21 @@ const declarations = [
   },
   {
     name: "get_station",
-    description: "Данные одной модели по коду (например Z2800-3800-L) или по комбинации без суффикса (Z2800-3800): мощность, пик, ёмкость, цена с доставкой, предел одной розетки, зарядка, примеры времени работы.",
-    parameters: { type: "object", properties: { code: { type: "string" } }, required: ["code"] },
+    description: "Данные одной модели по артикулу ZF… (например ZF28-2003.8; регистр и пробелы не важны, ZF16-2005 и ZF16-2005.0 — разные станции) или по коду Z… (например Z2800-3800-L) или комбинации без суффикса (Z2800-3800): мощность, пик, ёмкость, цена с доставкой, предел одной розетки, зарядка, примеры времени работы. Вызывай, когда клиент назвал артикул или код, спрашивает про конкретную модель, цену или зарядку. Если вернул ok:false — только тогда можно сказать, что такой модели нет.",
+    parameters: { type: "object", properties: { code: { type: "string", description: "артикул ZF… или код Z…" } }, required: ["code"] },
+  },
+  {
+    name: "list_stations",
+    description: "Список станций каталога с сортировкой, считает код, не модель. Вызывай на вопросы «самая мощная / ёмкая / дешёвая», «какие модели есть», «сколько вариантов». Возвращает компактные строки (code, article, title, body, power_w, peak_w, cap_wh, price_rub) и total_matching (сколько станций подходит под фильтр). Цена «по запросу» (0) всегда в конце при сортировке по цене.",
+    parameters: {
+      type: "object",
+      properties: {
+        sort_by: { type: "string", enum: ["power", "capacity", "price"], description: "по чему сортировать: мощность, ёмкость или цена; по умолчанию power" },
+        order: { type: "string", enum: ["desc", "asc"], description: "desc — от большего к меньшему (самая мощная, самая ёмкая), asc — от меньшего (самая дешёвая); по умолчанию desc" },
+        body: { type: "string", enum: ["D", "L"], description: "D = тёмный корпус, L = светлый на колёсах; не указывай, если корпус не важен" },
+        limit: { type: "integer", description: "сколько строк вернуть: по умолчанию 5, максимум 10" },
+      },
+    },
   },
   {
     name: "list_loads",
@@ -183,12 +196,57 @@ function stationFacts(st, kb) {
   };
 }
 
+/* Поиск без нечёткости: код Z с суффиксом, затем комбинация Z без суффикса, затем артикул ZF (точное совпадение; регистр и пробелы не важны) */
 function getStation(args, kb) {
   const raw = String((args && args.code) || "").trim().toUpperCase().replace(/\s+/g, "");
-  let found = kb.stations.filter((s) => s.code.toUpperCase() === raw);
-  if (!found.length) found = kb.stations.filter((s) => s.combo.toUpperCase() === raw);
-  if (!found.length) return { ok: false, error: "нет такой модели", hint: "код вида Z{мощность}-{ёмкость}-{D|L}, например Z2800-3800-L" };
-  return { ok: true, stations: found.map((s) => stationFacts(s, kb)) };
+  let found = [], by = null;
+  if (raw) {
+    found = kb.stations.filter((s) => s.code.toUpperCase() === raw); by = "code";
+    if (!found.length) { found = kb.stations.filter((s) => s.combo.toUpperCase() === raw); by = "combo"; }
+    if (!found.length) { found = kb.stations.filter((s) => String(s.article || "").toUpperCase() === raw); by = "article"; }
+  }
+  if (!found.length) return { ok: false, error: "нет такой модели", hint: "код Z... или артикул ZF..., например Z2800-3800-L или ZF28-2003.8; если не уверен, вызови list_stations" };
+  return { ok: true, matched_by: by, stations: found.map((s) => stationFacts(s, kb)) };
+}
+
+/* Список станций с сортировкой. Сортировку и числа считает код. Основной ключ — по sort_by, затем по второй характеристике в том же порядке,
+   затем цена по возрастанию, затем код. Цена «по запросу» (0) при сортировке по цене всегда в конце. */
+const SORT_KEYS = ["power", "capacity", "price"];
+function listStations(args, kb) {
+  const a = args || {};
+  const sortBy = a.sort_by === undefined || a.sort_by === null || a.sort_by === "" ? "power" : a.sort_by;
+  const order = a.order === undefined || a.order === null || a.order === "" ? "desc" : a.order;
+  if (!SORT_KEYS.includes(sortBy)) return { ok: false, error: "неизвестная сортировка", hint: "sort_by: power, capacity или price" };
+  if (order !== "desc" && order !== "asc") return { ok: false, error: "неизвестный порядок", hint: "order: desc или asc" };
+  const body = a.body === undefined || a.body === null || a.body === "" ? null : a.body;
+  if (body !== null && body !== "D" && body !== "L") return { ok: false, error: "неизвестный корпус", hint: "body: D (тёмный) или L (светлый на колёсах), либо не указывать" };
+  const limit = clamp(a.limit, 1, 10, 5);
+  const dir = order === "asc" ? 1 : -1;
+  const pool = kb.stations.filter((st) => !body || st.body === body);
+  const num = (st, k) => (k === "power" ? st.power_w : k === "capacity" ? st.cap_wh : st.price_rub);
+  const second = sortBy === "power" ? "capacity" : "power";
+  const rows = pool.slice().sort((x, y) => {
+    if (sortBy === "price") {
+      const px = x.price_rub || 0, py = y.price_rub || 0;
+      if (!px !== !py) return px ? -1 : 1; /* «по запросу» в конец */
+      if (px !== py) return dir * (px - py);
+    } else if (num(x, sortBy) !== num(y, sortBy)) return dir * (num(x, sortBy) - num(y, sortBy));
+    if (num(x, second) !== num(y, second)) return dir * (num(x, second) - num(y, second));
+    return ((x.price_rub || 1e12) - (y.price_rub || 1e12)) || x.code.localeCompare(y.code);
+  });
+  return {
+    ok: true,
+    sort_by: sortBy, order, body,
+    total_matching: pool.length, models_matching: new Set(pool.map((s) => s.combo)).size,
+    returned: Math.min(limit, rows.length),
+    first_value_ties: rows.length ? pool.filter((st) => num(st, sortBy) === num(rows[0], sortBy)).length : 0,
+    stations: rows.slice(0, limit).map((st) => ({
+      code: st.code, article: st.article, title: st.title, body: st.bodyName,
+      power_w: st.power_w, peak_w: st.peak_w, cap_wh: st.cap_wh,
+      price_rub: st.price_rub, price_note: st.price_rub ? "цена с доставкой" : "цена по запросу",
+    })),
+    reminder: "Называй клиенту только числа из этого результата. Если у нескольких станций одинаковая мощность, скажи об этом.",
+  };
 }
 
 function listLoads(_args, kb) {
@@ -199,6 +257,7 @@ function execute(name, args, kb) {
   switch (name) {
     case "select_stations": return selectStations(args || {}, kb);
     case "get_station": return getStation(args || {}, kb);
+    case "list_stations": return listStations(args || {}, kb);
     case "list_loads": return listLoads(args || {}, kb);
     case "handoff_to_manager": return { ok: true, contacts: kb.contacts };
     default: return { ok: false, error: "неизвестный инструмент" };
