@@ -39,7 +39,7 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
 <body>
 <header class="bar" id="top">
   <div class="wrap bar-in">
-    <a class="brand" href="#top" aria-label="НОВАЯ ЭНЕРДЖИ — портативные электростанции, на главную"><img class="brand-logo" src="favicon.svg?v=2" width="36" height="36" alt=""><span class="brand-t"><span class="brand-n">НОВАЯ ЭНЕРДЖИ</span><span class="brand-s">портативные электростанции</span></span></a>
+    <a class="brand" href="#top" aria-label="НОВАЯ ЭНЕРДЖИ — на главную"><img class="brand-logo" src="favicon.svg?v=2" width="36" height="36" alt=""><span class="brand-t"><span class="brand-n">НОВАЯ ЭНЕРДЖИ</span><span class="brand-s"><!--NM:tagline-->портативные зарядные станции<!--/NM:tagline--></span></span></a>
     <nav class="nav" aria-label="Разделы страницы">
       <a href="#catalog">Каталог</a>
       <a href="#picker">Подбор</a>
@@ -56,8 +56,8 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
 <div class="wrap">
   <section class="hero" aria-labelledby="h1">
     <div class="hero-text">
-      <h1 id="h1" class="reveal">Электростанции на <em>литий-железо-фосфатных</em> батареях</h1>
-      <p class="lead reveal">От 0,8 до 8 кВт и от 1,5 до 23 кВт·ч: отметьте приборы, которые нужно питать, и каталог покажет подходящие модели и на сколько часов их хватит.</p>
+      <h1 id="h1" class="reveal"><!--NM:h1_home-->Внешние аккумуляторы (портативные зарядные станции) на <em>литий-железо-фосфатных</em> батареях<!--/NM:h1_home--></h1>
+      <p class="lead reveal">От 0,8 до 8 кВт и от 1,5 до 23 кВт·ч: отметьте приборы, которые нужно питать, и каталог покажет подходящие модели и на сколько часов их хватит. Работает как <!--NM:search_phrase-->портативная электростанция<!--/NM:search_phrase-->: резервное питание для дома, дачи и кемпинга.</p>
       <p class="from reveal" id="heroFrom" hidden>от <b id="heroFromPrice"></b> <span class="dlv">с доставкой</span></p>
       <p class="term reveal">Срок доставки в Россию: около 25 дней</p>
       <div class="cta reveal">
@@ -72,7 +72,7 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
     </div>
     <div class="hero-vis">
       <div class="stage" id="stage">
-        <video id="heroVideo" muted loop playsinline autoplay preload="metadata" poster="img/hero-poster.jpg" data-src="img/hero.mp4" width="1280" height="720" aria-label="Иллюстративное видео: две портативные электростанции, тёмная и светлая, у дома вечером"></video>
+        <video id="heroVideo" muted loop playsinline autoplay preload="metadata" poster="img/hero-poster.jpg" data-src="img/hero.mp4" width="1280" height="720" aria-label="Иллюстративное видео: две станции, тёмная и светлая, у дома вечером"></video>
       </div>
       <p class="illus">Видео иллюстративное</p>
       <div class="hkinds" id="hkinds" role="group" aria-label="Вариант корпуса (быстрый выбор)"></div>
@@ -98,7 +98,7 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
         <figcaption><b>Квартира</b><span>Роутер, ноутбук и свет при отключении света</span><small>Изображение иллюстративное</small></figcaption>
       </figure>
       <figure class="use">
-        <img src="img/scene-pair.jpg" alt="Две портативные электростанции у дачного дома, рядом палатка и костёр" loading="lazy" width="1200" height="896">
+        <img src="img/scene-pair.jpg" alt="Две станции у дачного дома, рядом палатка и костёр" loading="lazy" width="1200" height="896">
         <figcaption><b>Дача и отдых</b><span>Свет, холодильник, инструмент без розетки</span><small>Изображение иллюстративное</small></figcaption>
       </figure>
     </div>
@@ -129,7 +129,7 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
     </div>
     <div class="tools">
       <div class="l">
-        <input type="search" id="q" placeholder="Поиск по коду" aria-label="Поиск по коду модели">
+        <input type="search" id="q" placeholder="Поиск по артикулу" aria-label="Поиск по артикулу модели">
         <select id="sort" aria-label="Сортировка">
           <option value="cap-asc">Ёмкость: по возрастанию</option>
           <option value="cap-desc">Ёмкость: по убыванию</option>
@@ -218,6 +218,7 @@ setTimeout(function(){if(!window.__revealOK)document.documentElement.classList.r
 
 <script src="assets/reveal.js"></script>
 <script src="data/catalog.js"></script>
+<script src="data/naming.js"></script>
 <script src="data/prices.js"></script>
 <script src="data/charge.js"></script>
 <script src="assets/calc.js"></script>

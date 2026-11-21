@@ -221,8 +221,9 @@ function chargeHtml(V,c){
 }
 /* alt фото версии корпуса: по файлу фото различаем «ящик» и «шкаф» */
 function bodyAlt(V,v){
-  if(v==="L") return "Светлая портативная электростанция на колёсах с выдвижной ручкой";
-  return V.img.indexOf("cabinet")>-1?"Тёмная портативная электростанция в корпусе-шкафу на колёсиках с четырьмя розетками":"Тёмная портативная электростанция с четырьмя розетками на лицевой панели";
+  var s=(typeof NAMING!=="undefined"&&NAMING.neutral)||"станция"; /* нейтральное слово из data/naming.json (род — женский) */
+  if(v==="L") return "Светлая "+s+" на колёсах с выдвижной ручкой";
+  return V.img.indexOf("cabinet")>-1?"Тёмная "+s+" в корпусе-шкафу на колёсиках с четырьмя розетками":"Тёмная "+s+" с четырьмя розетками на лицевой панели";
 }
 function cardHtml(c,S,open){
   open=open||{};
@@ -273,7 +274,7 @@ function cardHtml(c,S,open){
    '<div class="main">'+
      '<div class="pic"><div class="ph"><img src="'+V.img+'" alt="'+esc(bodyAlt(V,v)+': '+c.title)+'" loading="lazy" width="1200" height="896"></div>'+seg+'</div>'+
      '<div class="info"><p class="grp">'+esc(c.group)+' · '+esc(V.design)+'</p>'+
-       '<div class="hd"><h3>'+esc(c.title)+'</h3><span class="code">'+V.code+'</span></div>'+sp+l2+
+       '<div class="hd"><h3>'+esc(c.title)+'</h3><span class="code" title="Артикул (модель по документам)">Артикул '+esc(V.article)+'</span></div>'+sp+l2+
        '<div class="tags">'+tags+'</div></div>'+
      '<div class="side">'+side+'</div>'+
    '</div>'+
@@ -295,7 +296,7 @@ function currentList(){
     if(state.group&&c.group!==state.group) return false;
     if(state.power&&c.power!==state.power) return false;
     if(state.purpose&&c.purposes.indexOf(state.purpose)<0) return false;
-    if(state.q){var q=state.q, hit=Object.keys(c.vers).some(function(k){return c.vers[k].code.toLowerCase().indexOf(q)>-1}); if(!hit&&c.title.toLowerCase().indexOf(q)<0) return false;}
+    if(state.q){var q=state.q, hit=Object.keys(c.vers).some(function(k){var V=c.vers[k]; return V.code.toLowerCase().indexOf(q)>-1||String(V.article||"").toLowerCase().indexOf(q)>-1}); if(!hit&&c.title.toLowerCase().indexOf(q)<0) return false;}
     if(t.any&&state.only&&!fits(c,t)) return false;
     return true;
   });

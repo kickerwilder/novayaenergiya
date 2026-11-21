@@ -79,7 +79,7 @@ def product_name(naming, brand, article):
 
 
 def alternate_name(naming, power, cap):
-    """alternateName для JSON-LD Product: «Портативная электростанция 2 800 Вт · 3,8 кВт·ч» (поисковое название)."""
+    """alternateName для JSON-LD Product: поисковая формулировка search_phrase из naming.json + «2 800 Вт · 3,8 кВт·ч»."""
     return "%s %s" % (cap_first(naming["search_phrase"]), power_cap(power, cap))
 
 
