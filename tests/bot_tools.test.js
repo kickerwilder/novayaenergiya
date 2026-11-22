@@ -239,14 +239,16 @@ test("get_station отдаёт ac_socket_type, charging (сеть, солнеч�
     assert.ok(s0.car_ok ? /XT90/.test(s0.charging.car.answer) : /менеджеру с контактами/.test(s0.charging.car.answer), st.code);
   }
 });
-test("FAQ «Чем и как можно заряжать станцию?»: один раз, старый вопрос заменён, без «электростанц», последняя строка = generator.short", () => {
+test("FAQ «Чем и как можно заряжать станцию?»: один раз, старый вопрос заменён, без «электростанц», предпоследняя строка = generator.short, последняя про температуру", () => {
   const faq = JSON.parse(fs.readFileSync(path.join(ROOT, "scripts", "faq.json"), "utf8"));
   const items = faq.filter((f) => /заряж/.test(f.q));
   assert.strictEqual(items.length, 1, "вопросов про зарядку: " + items.length);
   assert.strictEqual(items[0].q, "Чем и как можно заряжать станцию?");
   assert.ok(!faq.some((f) => f.q === "Как и от чего заряжается станция?"));
   assert.ok(!/электростанц/i.test(items[0].a));
-  assert.strictEqual(items[0].a.split("\n").pop(), OC.charging_methods.generator.short);
+  const lines = items[0].a.split("\n");
+  assert.strictEqual(lines[lines.length - 1], "Заряжать станцию можно при температуре от 0 до +45 °C.");
+  assert.strictEqual(lines[lines.length - 2], OC.charging_methods.generator.short);
   assert.ok(/внешний MPPT-контроллер/.test(items[0].a) && /XT90/.test(items[0].a) && /12 В/.test(items[0].a));
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   assert.strictEqual(html.split("Чем и как можно заряжать станцию?").length - 1, 2, "ожидалось: видимый FAQ и JSON-LD");
@@ -260,6 +262,20 @@ test("тип розеток и вход под солнечные панели �
   const prompt = fs.readFileSync(path.join(ROOT, "bot", "prompt.md"), "utf8");
   assert.ok(!/переходник/i.test(prompt));
   assert.ok(!/нет: типа розеток|вход под солнечные панели, нестандартный/.test(prompt));
+});
+
+test("catalog.js: поле dcV у всех 42 версий равно specs.dc_voltage_v из таблицы (12 В: 12, 24 В: 21, 48 В: 9)", () => {
+  const vm = require("vm");
+  const DATA = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "data", "catalog.js"), "utf8") + "; DATA");
+  const counts = {};
+  let n = 0;
+  for (const c of DATA.combos) for (const v of Object.values(c.vers)) {
+    n++;
+    assert.strictEqual(v.dcV, SRC_SPECS.stations[v.code].dc_voltage_v, v.code);
+    counts[v.dcV] = (counts[v.dcV] || 0) + 1;
+  }
+  assert.strictEqual(n, 42);
+  assert.deepStrictEqual(counts, { 12: 12, 24: 21, 48: 9 });
 });
 
 console.log("\nитого: ok " + passed + ", ошибок " + failed);
