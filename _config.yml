@@ -1,0 +1,17 @@
+# Настройки сборки GitHub Pages (Jekyll). Служебные файлы остаются в репозитории и в git, но на сайте не публикуются.
+# Сайт использует: index.html, privacy.html, models/, assets/, data/*.js, data/kb.json (база знаний бота), img/, fonts/,
+# иконки, sitemap.xml, robots.txt, CNAME. Их здесь исключать нельзя.
+# Внимание: список exclude заменяет стандартный список Jekyll, поэтому Gemfile, node_modules и vendor перечислены явно.
+exclude:
+  - data/source
+  - data/naming.json
+  - README.md
+  - SKILL.md
+  - .claude
+  - scripts
+  - tests
+  - bot
+  - node_modules
+  - Gemfile
+  - Gemfile.lock
+  - vendor
