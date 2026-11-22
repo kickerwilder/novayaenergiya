@@ -14,6 +14,30 @@ const HANDOFF_TEXT = "Сейчас не могу ответить, позвон�
    в модель уходят последние historyMessages сообщений */
 const LIMITS = { bodyBytes: 16384, historyMessages: 12, chars: 500, assistantChars: 800, toolIterations: 4 };
 
+/* ---------- передача менеджеру (handoff) ----------
+   handoff = true означает: виджет показывает кнопки «Позвонить» и «Написать» (других уведомлений менеджеру бот не отправляет).
+   Не полагаемся только на модель (она часто не вызывает handoff_to_manager): ответ считается передачей менеджеру,
+   если в нём есть любая фраза из HANDOFF_PHRASES (список можно дополнять) или контакты менеджера (телефон, почта).
+   Один handoff на диалог: если в истории уже есть ответ бота с такой фразой или контактами, повторно флаг не ставится. */
+const HANDOFF_PHRASES = [
+  /уточните у менеджера/i,
+  /уточним у менеджера/i,
+  /передам менеджеру/i,
+];
+const PHONE_DIGITS = PHONE.replace(/\D/g, ""), PHONE_SHORT = PHONE_DIGITS.slice(1); /* 79787280002 и 9787280002 */
+function wantsHandoff(text) {
+  const t = String(text || "");
+  if (HANDOFF_PHRASES.some((re) => re.test(t))) return true;
+  if (t.toLowerCase().includes(EMAIL.toLowerCase())) return true;
+  const digits = t.replace(/\D/g, "");
+  return digits.includes(PHONE_DIGITS) || digits.includes(PHONE_SHORT);
+}
+/* history — сообщения диалога до нового ответа ({role, text}); byTool — модель вызвала handoff_to_manager */
+function resolveHandoff(reply, history, byTool) {
+  const already = (history || []).some((m) => m && m.role === "assistant" && wantsHandoff(m.text));
+  return !already && (!!byTool || wantsHandoff(reply));
+}
+
 /* ---------- лимиты запросов (в памяти процесса; при перезапуске обнуляются) ---------- */
 const perClient = new Map();
 const daily = { day: "", n: 0 };
@@ -67,7 +91,7 @@ function buildSystem(kb, env) {
   if (systemCache.has(kb)) return systemCache.get(kb);
   const s = readPrompt(env) +
     "\n## Правила\n" + kb.rules.map((r) => "- " + r).join("\n") +
-    "\n\n## УТОЧНЯЕТСЯ (цифр не называть, отвечать «уточним у менеджера» и давать контакты)\n" + kb.clarify.map((r) => "- " + r).join("\n") +
+    "\n\n## УТОЧНЯЕТСЯ (цифр не называть, отвечать «Уточните у менеджера» и давать контакты)\n" + kb.clarify.map((r) => "- " + r).join("\n") +
     "\n\n## Частые вопросы (ответы можно пересказывать)\n" + kb.faq.map((f) => "Вопрос: " + f.q + "\nОтвет: " + f.a).join("\n\n") +
     "\n\n## Контакты\nТелефон " + kb.contacts.phone + ", почта " + kb.contacts.email + ".\n" +
     "\n## Приборы в списке (id — название; мощности смотри в list_loads)\n" + kb.loads.map((l) => l.id + " — " + l.name).join("\n") + "\n";
@@ -97,6 +121,7 @@ function clean(text) {
 
 /* ---------- запрос к модели с запасной моделью ---------- */
 async function callModel(env, args) {
+  if (typeof env.__fakeModel === "function") return env.__fakeModel(args); /* только для тестов без LLM: в process.env функции быть не может */
   const models = [env.MODEL || "gemini-3.5-flash-lite"];
   if (env.FALLBACK_MODEL && env.FALLBACK_MODEL !== models[0]) models.push(env.FALLBACK_MODEL);
   let lastErr;
@@ -170,7 +195,7 @@ async function chat(request, env, origin) {
     }
     const reply = final && final.text ? clean(final.text) : "";
     if (!reply) return respond(say(HANDOFF_TEXT, { handoff: true }), 200, origin);
-    const out = say(reply, { cards: cardsFrom(toolLog), handoff });
+    const out = say(reply, { cards: cardsFrom(toolLog), handoff: resolveHandoff(reply, clean_.slice(0, -1), handoff) });
     if (trace) out.trace = { tools: toolLog };
     return respond(out, 200, origin);
   } catch (e) {
@@ -200,4 +225,4 @@ async function handle(request, env) {
   return respond({ error: "not_found" }, 404, "");
 }
 
-module.exports = { handle, LIMITS, HANDOFF_TEXT };
+module.exports = { handle, LIMITS, HANDOFF_TEXT, HANDOFF_PHRASES, wantsHandoff, resolveHandoff };
