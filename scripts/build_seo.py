@@ -174,7 +174,7 @@ def faq_block(faq):
            '  <h2 id="fqh">Частые вопросы</h2>',
            '  <div class="faq">']
     for f in faq:
-        out.append("    <details><summary>%s</summary><p>%s</p></details>" % (esc(f["q"]), linkify(f["a"])))
+        out.append("    <details><summary>%s</summary><p>%s</p></details>" % (esc(f["q"]), linkify(f["a"]).replace("\n", "<br>")))
     out += ["  </div>", "</section>"]
     return "\n".join(out)
 

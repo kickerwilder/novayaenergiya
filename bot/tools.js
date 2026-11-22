@@ -178,11 +178,30 @@ function chargeFacts(ch) {
 }
 
 /* характеристики версии (вес, размеры, упаковка, розетки, DC, USB) и список неподтверждённых полей: data/source/station_specs.json через kb.json */
-const SPECS_NOTE = "Характеристики по каталогу завода. Поля из unconfirmed не подтверждены: называй их только как «по каталогу завода, точное значение: уточните у менеджера», не как окончательные, и вызови handoff_to_manager. Типа розеток, мощности зарядки, входа под солнечные панели, сертификатов и гарантии завода в таблице характеристик нет.";
+const SPECS_NOTE = "Характеристики по каталогу завода. Поля из unconfirmed не подтверждены: называй их только как «по каталогу завода, точное значение: уточните у менеджера», не как окончательные, и вызови handoff_to_manager. Мощности зарядного устройства (в ваттах), сертификатов и гарантии завода в таблице характеристик нет. Тип розеток и способы зарядки (сеть, солнечные панели через внешний MPPT-контроллер, авто через XT90, генератор) берёшь из полей ac_socket_type и charging: это информация владельца, проверена на практике, заводом не подтверждена (так и называй источник, не «по каталогу завода»).";
 function specsOf(st, kb) {
   const list = (kb.specs && kb.specs[st.article]) || [];
   const e = list.find((x) => x.body === st.body);
   return e ? { specs: e.specs, unconfirmed: e.unconfirmed } : { specs: null, unconfirmed: [] };
+}
+
+/* Факты владельца (проверены на практике, заводом не подтверждены): тип розеток и способы зарядки. Из kb.owner_confirmed (station_specs.json).
+   car_ok: зарядка от автомобиля через XT90 возможна только при напряжении DC, указанном в данных (сейчас 12 В); значение берётся из данных, не из кода. */
+function ownerFacts(st, kb) {
+  const oc = kb.owner_confirmed;
+  if (!oc) return {};
+  const m = oc.charging_methods, carOk = st.car_ok === true;
+  return {
+    owner_info_source: oc.source,
+    ac_socket_type: oc.ac_socket_type,
+    car_ok: carOk,
+    charging: {
+      grid: m.grid,
+      solar: m.solar,
+      car: Object.assign({}, m.car, { car_ok: carOk, answer: carOk ? "да, через разъём XT90 (для этой версии на 12 В)" : "для этой версии не обещать, передать менеджеру с контактами" }),
+      generator: m.generator,
+    },
+  };
 }
 
 function stationFacts(st, kb) {
@@ -196,12 +215,13 @@ function stationFacts(st, kb) {
     power_w: st.power_w, power_kw: st.power_w / 1000, peak_w: st.peak_w, cap_wh: st.cap_wh, cap_kwh: Math.round(st.cap_wh / 100) / 10,
     price_rub: st.price_rub, price_note: st.price_rub ? "цена с доставкой" : "цена по запросу",
     max_socket_w: st.maxSocket_w,
-    sockets_catalog: st.sockets_catalog, sockets_note: "по каталогу; тип розеток (форма вилки) не указан, уточняется у менеджера; число розеток и пределы мощности смотри в specs.sockets_ac",
+    sockets_catalog: st.sockets_catalog, sockets_note: "число розеток и пределы мощности смотри в specs.sockets_ac (по каталогу завода); тип розеток — в ac_socket_type (информация владельца)",
     dc_output: st.dc_output,
     charge: chargeFacts(st.charge),
     temp_charge: st.temp_charge, temp_discharge: st.temp_discharge,
     runtime_examples: examples,
     specs: specsOf(st, kb).specs, unconfirmed: specsOf(st, kb).unconfirmed, specs_note: SPECS_NOTE,
+    ...ownerFacts(st, kb),
   };
 }
 

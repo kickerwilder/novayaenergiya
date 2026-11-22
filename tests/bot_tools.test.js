@@ -201,5 +201,66 @@ test("публичные файлы без запрещённых слов", () 
   }
 });
 
+console.log("информация владельца: тип розеток и способы зарядки");
+const SRC_SPECS = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "source", "station_specs.json"), "utf8"));
+const OC = SRC_SPECS.common.owner_confirmed;
+test("station_specs.json: блок common.owner_confirmed с источником «информация владельца», _meta.not_in_catalog не тронут", () => {
+  assert.ok(/информация владельца.*не подтверждено заводом/.test(OC.source));
+  assert.ok(/европейского типа/.test(OC.ac_socket_type));
+  const m = OC.charging_methods;
+  assert.strictEqual(m.solar.external_mppt, true);
+  assert.strictEqual(m.solar.in_kit, false);
+  assert.strictEqual(m.solar.builtin_mppt, false);
+  assert.strictEqual(m.car.connector, "XT90");
+  assert.ok(m.generator.short && m.generator.full);
+  assert.ok(SRC_SPECS._meta.not_in_catalog.includes("тип розеток 220 В (форма вилки)"), "_meta.not_in_catalog изменён");
+  assert.strictEqual(SRC_SPECS._meta.not_in_catalog.length, 7);
+});
+test("kb.json: owner_confirmed импортирован из таблицы (не вручную)", () => {
+  assert.deepStrictEqual(kb.owner_confirmed, { source: OC.source, ac_socket_type: OC.ac_socket_type, charging_methods: OC.charging_methods });
+});
+test("car_ok = dc_voltage_v 12 В из данных: 12 версий, совпадает с таблицей", () => {
+  const need = OC.charging_methods.car.requires_dc_voltage_v;
+  const expected = Object.entries(SRC_SPECS.stations).filter(([, e]) => e.dc_voltage_v === need).map(([c]) => c).sort();
+  assert.strictEqual(expected.length, 12);
+  assert.deepStrictEqual(kb.stations.filter((s) => s.car_ok).map((s) => s.code).sort(), expected);
+  for (const st of kb.stations) assert.strictEqual(get(st.code).stations[0].car_ok, expected.includes(st.code), st.code);
+});
+test("get_station отдаёт ac_socket_type, charging (сеть, солнечные панели, авто, генератор) и источник", () => {
+  for (const st of kb.stations) {
+    const s0 = get(st.code).stations[0];
+    assert.ok(/европейского типа/.test(s0.ac_socket_type));
+    assert.ok(/информация владельца/.test(s0.owner_info_source));
+    assert.strictEqual(s0.charging.solar.builtin_mppt, false);
+    assert.strictEqual(s0.charging.solar.external_mppt, true);
+    assert.strictEqual(s0.charging.generator.short, OC.charging_methods.generator.short);
+    assert.strictEqual(s0.charging.generator.full, OC.charging_methods.generator.full);
+    assert.strictEqual(s0.charging.car.car_ok, s0.car_ok);
+    assert.ok(s0.car_ok ? /XT90/.test(s0.charging.car.answer) : /менеджеру с контактами/.test(s0.charging.car.answer), st.code);
+  }
+});
+test("FAQ «Чем и как можно заряжать станцию?»: один раз, старый вопрос заменён, без «электростанц», последняя строка = generator.short", () => {
+  const faq = JSON.parse(fs.readFileSync(path.join(ROOT, "scripts", "faq.json"), "utf8"));
+  const items = faq.filter((f) => /заряж/.test(f.q));
+  assert.strictEqual(items.length, 1, "вопросов про зарядку: " + items.length);
+  assert.strictEqual(items[0].q, "Чем и как можно заряжать станцию?");
+  assert.ok(!faq.some((f) => f.q === "Как и от чего заряжается станция?"));
+  assert.ok(!/электростанц/i.test(items[0].a));
+  assert.strictEqual(items[0].a.split("\n").pop(), OC.charging_methods.generator.short);
+  assert.ok(/внешний MPPT-контроллер/.test(items[0].a) && /XT90/.test(items[0].a) && /12 В/.test(items[0].a));
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  assert.strictEqual(html.split("Чем и как можно заряжать станцию?").length - 1, 2, "ожидалось: видимый FAQ и JSON-LD");
+  assert.ok(!html.includes("Как и от чего заряжается станция?"));
+  assert.strictEqual(kb.faq.filter((f) => f.q === "Чем и как можно заряжать станцию?").length, 1);
+  assert.strictEqual(kb.faq.find((f) => /заряжать/.test(f.q)).a, items[0].a);
+});
+test("тип розеток и вход под солнечные панели больше не в списках «в данных нет / к уточнению»", () => {
+  assert.ok(!kb.clarify.some((r) => /вход для солнечных панелей|Тип розеток/.test(r)));
+  assert.ok(!kb.rules.some((r) => /переходник/i.test(r)));
+  const prompt = fs.readFileSync(path.join(ROOT, "bot", "prompt.md"), "utf8");
+  assert.ok(!/переходник/i.test(prompt));
+  assert.ok(!/нет: типа розеток|вход под солнечные панели, нестандартный/.test(prompt));
+});
+
 console.log("\nитого: ok " + passed + ", ошибок " + failed);
 process.exit(failed ? 1 : 0);

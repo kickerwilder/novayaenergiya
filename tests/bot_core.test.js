@@ -95,6 +95,18 @@ async function ask(messages, steps) {
     const d2 = await ask(history, [{ text: "Уточните у менеджера: " + CONTACTS + "." }]);
     assert.strictEqual(d2.handoff, true);
   });
+  await test("системная инструкция содержит информацию владельца из kb.owner_confirmed (тип розеток, генератор дословно, внешний MPPT)", async () => {
+    let system = "";
+    const env = { __fakeModel: async (a) => { system = a.system; return { content: { role: "model", parts: [{ text: "ок" }] }, text: "ок", calls: [], finishReason: "STOP" }; }, RATE_LIMIT: "100000", DAILY_CAP: "1000000" };
+    const req = new Request("http://bot.local/chat", { method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:38800" }, body: JSON.stringify({ messages: [{ role: "user", text: "q" }] }) });
+    await handle(req, env);
+    const oc = JSON.parse(require("fs").readFileSync(path.join(__dirname, "..", "data", "kb.json"), "utf8")).owner_confirmed;
+    assert.ok(system.includes(oc.charging_methods.generator.full), "нет полного текста про генератор");
+    assert.ok(system.includes(oc.charging_methods.generator.short));
+    assert.ok(system.includes(oc.ac_socket_type));
+    assert.ok(/внешний MPPT-контроллер/.test(system) && /информация владельца/.test(system));
+    assert.ok(!/переходник/i.test(system));
+  });
 
   console.log("\nитого: ok " + passed + ", ошибок " + failed);
   process.exit(failed ? 1 : 0);

@@ -86,6 +86,19 @@ function readPrompt(env) {
   const fs = require("fs"), path = require("path");
   return (promptText = fs.readFileSync(path.join(__dirname, "prompt.md"), "utf8"));
 }
+/* Информация владельца (проверена на практике, заводом не подтверждена): тексты берутся из kb.owner_confirmed, а не пишутся в коде */
+function ownerSection(kb) {
+  const oc = kb.owner_confirmed;
+  if (!oc) return "";
+  const m = oc.charging_methods;
+  return "\n\n## Информация владельца (" + oc.source + ")\n" +
+    "- Тип розеток: " + oc.ac_socket_type + ".\n" +
+    "- Сеть: " + m.grid.text + " " + m.grid.time + "\n" +
+    "- Солнечные панели: " + m.solar.text + " " + m.solar.selection + "\n" +
+    "- Авто: " + m.car.text + " Только версии с car_ok = true (из get_station). " + m.car.other_voltages + " " + m.car.cables + " " + m.car.charge_time + "\n" +
+    "- Генератор, короткая фраза (последняя строка в ответе про способы зарядки): " + m.generator.short + "\n" +
+    "- Генератор, полный ответ на прямой вопрос (дословно): " + m.generator.full + " " + m.generator.simultaneous_with_load + "\n";
+}
 const systemCache = new WeakMap();
 function buildSystem(kb, env) {
   if (systemCache.has(kb)) return systemCache.get(kb);
@@ -93,6 +106,7 @@ function buildSystem(kb, env) {
     "\n## Правила\n" + kb.rules.map((r) => "- " + r).join("\n") +
     "\n\n## УТОЧНЯЕТСЯ (цифр не называть, отвечать «Уточните у менеджера» и давать контакты)\n" + kb.clarify.map((r) => "- " + r).join("\n") +
     "\n\n## Частые вопросы (ответы можно пересказывать)\n" + kb.faq.map((f) => "Вопрос: " + f.q + "\nОтвет: " + f.a).join("\n\n") +
+    ownerSection(kb) +
     "\n\n## Контакты\nТелефон " + kb.contacts.phone + ", почта " + kb.contacts.email + ".\n" +
     "\n## Приборы в списке (id — название; мощности смотри в list_loads)\n" + kb.loads.map((l) => l.id + " — " + l.name).join("\n") + "\n";
   systemCache.set(kb, s);
