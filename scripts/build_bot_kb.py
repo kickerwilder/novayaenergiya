@@ -3,7 +3,9 @@
 Запуск из корня репозитория: python scripts/build_bot_kb.py   (или scripts/build_all.py)
 
 Без внешних зависимостей, идемпотентный: повторный запуск ничего не меняет, если данные те же.
-Источники: data/catalog.js (версии, приборы), data/prices.js (цены «с доставкой»), data/charge.js (зарядка), scripts/faq.json.
+Источники: data/catalog.js (версии, приборы), data/prices.js (цены «с доставкой»), data/charge.js (зарядка), scripts/faq.json,
+data/source/station_specs.json (характеристики по каталогам завода: вес, размеры, упаковка, розетки, DC, USB и список unconfirmed;
+руками не править, правки через этот файл и повторный запуск скрипта).
 Расчёты (подбор, часы работы) бот делает кодом через assets/calc.js; в базе знаний только данные и правила.
 
 Вес, габариты, точное число и тип розеток, допуск по напряжению, сертификаты и т. п. сюда НЕ попадают как факты:
@@ -21,6 +23,8 @@ NAMING = nm.load()  # единственный источник наименов
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "kb.json"
+SPECS_SRC = ROOT / "data" / "source" / "station_specs.json"
+SPEC_FIELDS = ["weight_kg", "weight_packed_kg", "size_cm", "package_cm", "sockets_ac", "dc_voltage_v", "dc_connectors", "usb"]
 SITE_URL = None  # берётся из build_seo.py, чтобы адрес был в одном месте
 
 CONTACTS = {"phone": "+7 978 728-00-02", "email": "apv0050@gmail.com"}
@@ -44,12 +48,12 @@ RULES = [
 ]
 
 CLARIFY = [
-    "Вес и габариты станций уточняются — цифр не называть.",
-    "Точное число и тип розеток уточняются — называть только «по каталогу, точное число и тип уточняются».",
+    "Тип розеток (форма вилки) не указан — не выдумывать, «уточним у менеджера». Число розеток, вес, размеры и порты — только из specs, а поля из unconfirmed называть как «по каталогу завода, точное значение уточним у менеджера».",
     "Допуск по выходному напряжению уточняется — цифр не называть.",
     "Сертификаты и соответствие стандартам уточняются — не обещать.",
     "Работа тёмных моделей при низких температурах уточняется — отвечать «уточним у менеджера».",
     "Точная ёмкость по реальным замерам уточняется.",
+    "Тип розеток 220 В (форма вилки), вход для солнечных панелей, форма выходного напряжения (синусоида), сертификаты и гарантия завода в таблице характеристик по каталогам завода не указаны — не выдумывать, передавать менеджеру.",
     "Наличие, скидки, сроки, кроме «около 25 дней», рассрочка, оплата, адрес и режим работы — не обещать, направлять на телефон или почту.",
 ]
 
@@ -76,6 +80,24 @@ def load_charge():
     t = read(ROOT / "data" / "charge.js")
     i = t.index("const CHARGE = ")
     return json.loads(t[t.index("{", i): t.rindex("}") + 1])
+
+
+def load_specs(stations):
+    """Характеристики по артикулам: {артикул: [{body, specs, unconfirmed}, ...]} (для страницы из D и L обе версии с полем body)."""
+    src = json.loads(read(SPECS_SRC))["stations"]
+    by_code = {s["code"]: s for s in stations}
+    if set(src) != set(by_code):
+        sys.exit("station_specs.json и каталог расходятся: нет в таблице %s; лишние в таблице %s" % (
+            sorted(set(by_code) - set(src)), sorted(set(src) - set(by_code))))
+    out = {}
+    for code in [s["code"] for s in stations]:  # порядок каталога: D, затем L внутри комбинации
+        e, st = src[code], by_code[code]
+        if e["article"] != st["article"] or e["body"] != st["body"] or e["power_w"] != st["power_w"] or e["cap_wh"] != st["cap_wh"]:
+            sys.exit("station_specs.json: %s не совпадает с каталогом (артикул/корпус/мощность/ёмкость)" % code)
+        entry = {"body": e["body"], "specs": {k: e[k] for k in SPEC_FIELDS},
+                 "unconfirmed": [{"field": u["field"], "note": u["note"]} for u in e.get("unconfirmed", [])]}
+        out.setdefault(st["article"], []).append(entry)
+    return out
 
 
 def r1(x):
@@ -130,6 +152,7 @@ def build():
         "phone_wh": data["phone_wh"],
         "bodies": {k: data["versions"][k]["name"] for k in data["versions"]},
         "stations": stations,
+        "specs": load_specs(stations),
         "loads": loads,
         "rules": RULES,
         "clarify": CLARIFY,
@@ -141,7 +164,10 @@ def build():
 def dump(kb):
     parts = []
     for key, val in kb.items():
-        if key in ("stations", "loads", "faq"):
+        if key == "specs":
+            body = ",\n    ".join("%s: %s" % (json.dumps(a), json.dumps(v, ensure_ascii=False, separators=(",", ":"))) for a, v in val.items())
+            parts.append('  "specs": {\n    %s\n  }' % body)
+        elif key in ("stations", "loads", "faq"):
             body = ",\n    ".join(json.dumps(x, ensure_ascii=False, separators=(",", ":")) for x in val)
             parts.append('  %s: [\n    %s\n  ]' % (json.dumps(key), body))
         else:

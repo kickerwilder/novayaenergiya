@@ -50,7 +50,7 @@ const declarations = [
   },
   {
     name: "list_stations",
-    description: "Список станций каталога с сортировкой, считает код, не модель. Вызывай на вопросы «самая мощная / ёмкая / дешёвая», «какие модели есть», «сколько вариантов». Возвращает компактные строки (code, article, title, body, power_w, peak_w, cap_wh, price_rub) и total_matching (сколько станций подходит под фильтр). Цена «по запросу» (0) всегда в конце при сортировке по цене.",
+    description: "Список станций каталога с сортировкой, считает код, не модель. Вызывай на вопросы «самая мощная / ёмкая / дешёвая», «какие модели есть», «сколько вариантов». Возвращает строки (code, article, title, body, power_w, peak_w, cap_wh, price_rub, specs, unconfirmed) и total_matching (сколько станций подходит под фильтр). Цена «по запросу» (0) всегда в конце при сортировке по цене.",
     parameters: {
       type: "object",
       properties: {
@@ -177,6 +177,14 @@ function chargeFacts(ch) {
   };
 }
 
+/* характеристики версии (вес, размеры, упаковка, розетки, DC, USB) и список неподтверждённых полей: data/source/station_specs.json через kb.json */
+const SPECS_NOTE = "Характеристики по каталогу завода. Поля из unconfirmed не подтверждены: называй их только как «по каталогу завода, точное значение уточним у менеджера», не как окончательные, и предложи менеджера. Типа розеток, времени зарядки по таблице характеристик, входа под солнечные панели, формы синусоиды, сертификатов и гарантии завода в данных нет.";
+function specsOf(st, kb) {
+  const list = (kb.specs && kb.specs[st.article]) || [];
+  const e = list.find((x) => x.body === st.body);
+  return e ? { specs: e.specs, unconfirmed: e.unconfirmed } : { specs: null, unconfirmed: [] };
+}
+
 function stationFacts(st, kb) {
   const c = adapt(st);
   const examples = ["router", "laptop", "fridge", "kettle"].map((id) => kb.loads.find((l) => l.id === id)).filter(Boolean).map((l) => ({
@@ -188,11 +196,12 @@ function stationFacts(st, kb) {
     power_w: st.power_w, power_kw: st.power_w / 1000, peak_w: st.peak_w, cap_wh: st.cap_wh, cap_kwh: Math.round(st.cap_wh / 100) / 10,
     price_rub: st.price_rub, price_note: st.price_rub ? "цена с доставкой" : "цена по запросу",
     max_socket_w: st.maxSocket_w,
-    sockets_catalog: st.sockets_catalog, sockets_note: "по каталогу; точное число и тип розеток уточняются у менеджера",
+    sockets_catalog: st.sockets_catalog, sockets_note: "по каталогу; тип розеток (форма вилки) не указан, уточняется у менеджера; число розеток и пределы мощности смотри в specs.sockets_ac",
     dc_output: st.dc_output,
     charge: chargeFacts(st.charge),
     temp_charge: st.temp_charge, temp_discharge: st.temp_discharge,
     runtime_examples: examples,
+    specs: specsOf(st, kb).specs, unconfirmed: specsOf(st, kb).unconfirmed, specs_note: SPECS_NOTE,
   };
 }
 
@@ -244,7 +253,9 @@ function listStations(args, kb) {
       code: st.code, article: st.article, title: st.title, body: st.bodyName,
       power_w: st.power_w, peak_w: st.peak_w, cap_wh: st.cap_wh,
       price_rub: st.price_rub, price_note: st.price_rub ? "цена с доставкой" : "цена по запросу",
+      specs: specsOf(st, kb).specs, unconfirmed: specsOf(st, kb).unconfirmed,
     })),
+    specs_note: SPECS_NOTE,
     reminder: "Называй клиенту только числа из этого результата. Если у нескольких станций одинаковая мощность, скажи об этом.",
   };
 }

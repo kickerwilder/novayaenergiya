@@ -92,9 +92,9 @@ test("по умолчанию: power desc, limit 5, первая = максим�
   assert.strictEqual(r.total_matching, 42);
   assert.strictEqual(r.models_matching, 29);
 });
-test("строки компактные и содержат нужные поля", () => {
+test("строки содержат нужные поля (включая specs и unconfirmed)", () => {
   const row = list({ limit: 1 }).stations[0];
-  assert.deepStrictEqual(Object.keys(row).sort(), ["article", "body", "cap_wh", "code", "peak_w", "power_w", "price_note", "price_rub", "title"]);
+  assert.deepStrictEqual(Object.keys(row).sort(), ["article", "body", "cap_wh", "code", "peak_w", "power_w", "price_note", "price_rub", "specs", "title", "unconfirmed"]);
   const st = kb.stations.find((s) => s.code === row.code);
   assert.strictEqual(row.article, st.article);
   assert.strictEqual(row.peak_w, st.peak_w);
@@ -141,6 +141,64 @@ test("неизвестные параметры: ok:false с подсказко�
 });
 test("результат детерминирован (одинаковый вызов — одинаковый ответ)", () => {
   assert.deepStrictEqual(list({ sort_by: "power" }), list({ sort_by: "power" }));
+});
+
+console.log("specs (характеристики по каталогам завода)");
+const SPEC_KEYS = ["weight_kg", "weight_packed_kg", "size_cm", "package_cm", "sockets_ac", "dc_voltage_v", "dc_connectors", "usb"];
+test("на каждый артикул есть specs: 31 артикул, 42 версии, все поля, у D и L общего артикула обе записи с полем body", () => {
+  assert.strictEqual(Object.keys(kb.specs).length, 31);
+  assert.strictEqual(Object.values(kb.specs).reduce((n, v) => n + v.length, 0), 42);
+  for (const art of new Set(kb.stations.map((s) => s.article))) {
+    const entries = kb.specs[art];
+    assert.ok(entries && entries.length, "нет specs для " + art);
+    const bodies = kb.stations.filter((s) => s.article === art).map((s) => s.body).sort();
+    assert.deepStrictEqual(entries.map((e) => e.body).sort(), bodies, art + ": корпуса specs и станций не совпали");
+    entries.forEach((e) => {
+      SPEC_KEYS.forEach((k) => assert.ok(e.specs[k] !== undefined && e.specs[k] !== null && e.specs[k] !== "", art + " " + e.body + ": нет поля " + k));
+      assert.ok(Array.isArray(e.unconfirmed));
+    });
+  }
+});
+test("get_station отдаёт specs и unconfirmed для всех 42 версий", () => {
+  for (const st of kb.stations) {
+    const s0 = get(st.code).stations[0];
+    assert.ok(s0.specs && s0.specs.weight_kg > 0, st.code + ": нет specs");
+    assert.ok(Array.isArray(s0.unconfirmed), st.code + ": нет unconfirmed");
+    assert.ok(/каталогу завода/.test(s0.specs_note));
+  }
+});
+test("значения specs совпадают с исходной таблицей data/source/station_specs.json", () => {
+  const src = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "source", "station_specs.json"), "utf8")).stations;
+  assert.strictEqual(Object.keys(src).length, 42);
+  for (const [code, e] of Object.entries(src)) {
+    const s0 = get(code).stations[0];
+    assert.strictEqual(s0.article, e.article);
+    assert.strictEqual(s0.specs.weight_kg, e.weight_kg);
+    assert.deepStrictEqual(s0.specs.size_cm, e.size_cm);
+    assert.deepStrictEqual(s0.specs.sockets_ac, e.sockets_ac);
+    assert.strictEqual(s0.specs.usb, e.usb);
+    assert.deepStrictEqual(s0.unconfirmed.map((u) => u.field), e.unconfirmed.map((u) => u.field));
+  }
+});
+test("Z1600-5000-L: порты USB помечены unconfirmed (бот не должен называть USB-C фактом)", () => {
+  const u = get("Z1600-5000-L").stations[0].unconfirmed.find((x) => x.field === "usb");
+  assert.ok(u && /расходятся/.test(u.note));
+});
+test("Z4000-4600-D: розетка 16 А «до 4000 Вт» помечена unconfirmed (socket16)", () => {
+  const s0 = get("Z4000-4600-D").stations[0];
+  assert.strictEqual(s0.specs.sockets_ac.ac_16a.max_w, 4000);
+  assert.ok(s0.unconfirmed.some((x) => x.field === "socket16"));
+});
+test("list_stations отдаёт specs и unconfirmed в строках", () => {
+  list({ limit: 10 }).stations.forEach((row) => {
+    assert.ok(row.specs && row.specs.weight_kg > 0, row.code);
+    assert.ok(Array.isArray(row.unconfirmed));
+  });
+});
+test("публичные файлы без запрещённых слов", () => {
+  for (const f of ["data/kb.json", "data/source/station_specs.json", "bot/prompt.md"]) {
+    assert.ok(!/постав[щ]ик|наце[н]к|себесто[и]м|мар[ж]а/i.test(fs.readFileSync(path.join(ROOT, f), "utf8")), f + ": запрещённое слово");
+  }
 });
 
 console.log("\nитого: ok " + passed + ", ошибок " + failed);
