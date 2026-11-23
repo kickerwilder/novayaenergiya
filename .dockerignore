@@ -1,0 +1,7 @@
+# Сборка образа бота берёт только нужное: bot/*.js, bot/prompt.md, bot/package*.json и assets/calc.js
+*
+!bot/package.json
+!bot/package-lock.json
+!bot/*.js
+!bot/prompt.md
+!assets/calc.js
