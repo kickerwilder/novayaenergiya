@@ -1,0 +1,33 @@
+# Запуск бота на VPS: docker compose up -d --build   (из папки bot/, рядом лежит .env по образцу example.env)
+# Порт открыт только на 127.0.0.1: снаружи бот виден через Caddy (bot/deploy/Caddyfile).
+services:
+  bot:
+    build:
+      context: ..
+      dockerfile: bot/Dockerfile
+    image: novayaenergiya-bot:latest
+    container_name: novayaenergiya-bot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: "0.0.0.0"      # внутри контейнера; наружу порт публикуется только на 127.0.0.1 (см. ports)
+      PORT: "8787"
+      TRUST_PROXY: "1"     # реальный IP клиента из X-Forwarded-For (его выставляет Caddy)
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      # база знаний из каталога сайта: бот и сайт читают один и тот же data/kb.json (деплой сайта обновляет его)
+      - /srv/site/data:/app/data:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

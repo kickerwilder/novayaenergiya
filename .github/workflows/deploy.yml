@@ -1,0 +1,89 @@
+# Выкладка сайта на VPS: копирует готовые файлы сайта (без внутренних путей) по rsync/SSH в /srv/site.
+# Запуск ТОЛЬКО вручную (Actions → deploy-site → Run workflow), пока владелец не включит автозапуск (см. блок push ниже).
+# Секреты хранятся только в Secrets репозитория (Settings → Secrets and variables → Actions); в файле только их имена:
+#   DEPLOY_SSH_KEY      закрытый ключ отдельного пользователя деплоя (ed25519)
+#   DEPLOY_KNOWN_HOSTS  строка(и) known_hosts сервера (ssh-keyscan -t ed25519 <хост>), чтобы не доверять хосту «на лету»
+#   DEPLOY_HOST         адрес сервера
+#   DEPLOY_USER         пользователь деплоя
+#   DEPLOY_PORT         порт SSH (необязательно, по умолчанию 22)
+# Сборка не нужна: готовые файлы (index.html, models/*.html, data/*.js, kb.json, sitemap.xml) закоммичены scripts/build_all.py;
+# шаг «Проверка» лишь убеждается, что закоммиченное совпадает с результатом сборки.
+
+name: deploy-site
+
+on:
+  workflow_dispatch:
+  # Автозапуск по пушу в main: включить, когда владелец скажет (снять комментарий).
+  # push:
+  #   branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-site
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # полная история: даты файлов для sitemap.xml берутся из git
+
+      - name: Проверка — закоммиченная сборка актуальна
+        run: |
+          python3 scripts/build_all.py
+          git diff --exit-code
+
+      - name: Подготовить файлы сайта (без внутренних путей)
+        run: |
+          rm -rf _site
+          mkdir _site
+          # Список исключений совпадает с _config.yml (GitHub Pages) и с закрытыми путями в bot/deploy/Caddyfile
+          rsync -a \
+            --exclude '/_site/' \
+            --exclude '/.git/' --exclude '/.github/' --exclude '/.claude/' --exclude '/.gitignore' --exclude '/.dockerignore' \
+            --exclude '/_config.yml' --exclude '/CNAME' \
+            --exclude '/README.md' --exclude '/SKILL.md' \
+            --exclude '/data/source/' --exclude '/data/naming.json' \
+            --exclude '/scripts/' --exclude '/tests/' --exclude '/bot/' \
+            --exclude '/node_modules/' --exclude '/Gemfile*' --exclude '/vendor/' \
+            ./ _site/
+          # страховка: во внутренних путях ничего не осталось, а нужное сайту на месте
+          for p in data/source data/naming.json README.md SKILL.md scripts tests bot .claude .git _config.yml; do
+            if [ -e "_site/$p" ]; then echo "Во внутренние файлы попал: $p"; exit 1; fi
+          done
+          for p in index.html privacy.html 404.html robots.txt sitemap.xml data/catalog.js data/kb.json assets/app.js assets/styles.css; do
+            if [ ! -e "_site/$p" ]; then echo "Нет обязательного файла: $p"; exit 1; fi
+          done
+          echo "Файлов к выкладке: $(find _site -type f | wc -l)"
+
+      - name: Сохранить копию сборки (для аварийного размещения в другом месте)
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-build
+          path: _site
+          retention-days: 30
+
+      - name: Настроить SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Выложить на сервер (rsync)
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          rsync -az --delete \
+            -e "ssh -i $HOME/.ssh/id_deploy -p ${DEPLOY_PORT:-22} -o StrictHostKeyChecking=yes -o BatchMode=yes" \
+            _site/ "$DEPLOY_USER@$DEPLOY_HOST:/srv/site/"

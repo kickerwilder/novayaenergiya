@@ -7,6 +7,8 @@ const crypto = require("crypto");
 const { loadKb } = require("./kb.js");
 const tools = require("./tools.js");
 const { generate, ProviderError } = require("./provider.js");
+const { maskPII } = require("./pii.js");
+const { notifyManager } = require("./telegram.js");
 
 const PHONE = "+7 978 728-00-02", EMAIL = "apv0050@gmail.com";
 const HANDOFF_TEXT = "Сейчас не могу ответить, позвоните " + PHONE + " или напишите на " + EMAIL;
@@ -64,11 +66,11 @@ function overDailyCap(env) {
 
 /* ---------- ответы ---------- */
 function parseOrigins(s) {
-  return String(s === undefined ? "https://novaya-energy.ru" : s).split(",").map((x) => x.trim().replace(/\/+$/, "")).filter(Boolean);
+  return String(s === undefined ? "https://novaya-energy.ru,https://www.novaya-energy.ru" : s).split(",").map((x) => x.trim().replace(/\/+$/, "")).filter(Boolean);
 }
 function isOriginAllowed(origin, env) {
   if (!origin) return false;
-  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  if (String(env.ALLOW_LOCALHOST) === "1" && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true; /* только для разработки и тестов */
   return parseOrigins(env.ALLOWED_ORIGINS).includes(origin);
 }
 function respond(obj, status, origin, extra) {
@@ -183,14 +185,15 @@ async function chat(request, env, origin) {
 
   const key = clientKey(request, env);
   if (overLimit(key, env) || overDailyCap(env)) return respond(say(HANDOFF_TEXT, { handoff: true }), 429, origin);
-  if (String(env.LOG_QUESTIONS) === "1") console.log("question: " + clean_[clean_.length - 1].text); /* только текст вопроса, без IP и метаданных */
+ /* тексты диалогов и контакты клиентов в логи не пишутся */
 
   const trace = String(env.TEST_TRACE) === "1";
   const deadline = Date.now() + (Number(env.TIMEOUT_MS) || 20000);
   try {
     const kb = await loadKb(env);
     const system = buildSystem(kb, env);
-    const contents = clean_.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.text }] }));
+    /* персональные данные клиента (телефон, e-mail, ФИО) заменяются метками до отправки в LLM: [ТЕЛЕФОН], [EMAIL], [ФИО] */
+    const contents = clean_.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.role === "user" ? maskPII(m.text) : m.text }] }));
     const toolLog = [];
     let handoff = false, final = null;
     for (let step = 0; step <= LIMITS.toolIterations; step++) {
@@ -209,12 +212,17 @@ async function chat(request, env, origin) {
     }
     const reply = final && final.text ? clean(final.text) : "";
     if (!reply) return respond(say(HANDOFF_TEXT, { handoff: true }), 200, origin);
-    const out = say(reply, { cards: cardsFrom(toolLog), handoff: resolveHandoff(reply, clean_.slice(0, -1), handoff) });
+    const handoffNow = resolveHandoff(reply, clean_.slice(0, -1), handoff);
+    if (handoffNow) { /* уведомление в Telegram (через прокси, см. telegram.js); ответ клиенту не ждёт его и не ломается при сбое */
+      const userTexts = clean_.filter((m) => m.role === "user").map((m) => maskPII(m.text));
+      notifyManager(env, userTexts[userTexts.length - 1], userTexts.length > 1 ? userTexts[userTexts.length - 2] : "");
+    }
+    const out = say(reply, { cards: cardsFrom(toolLog), handoff: handoffNow });
     if (trace) out.trace = { tools: toolLog };
     return respond(out, 200, origin);
   } catch (e) {
     /* сырые ошибки провайдера и сервера клиенту не отдаются; в лог — только вид сбоя без текста ответа */
-    console.error("chat_error: " + (e instanceof ProviderError ? e.kind + (e.status ? " " + e.status : "") : "internal " + (e && e.name) + ": " + String(e && e.message).slice(0, 160)));
+    console.error("chat_error: " + (e instanceof ProviderError ? e.kind + (e.status ? " " + e.status : "") : "internal " + (e && e.name)));
     return respond(say(HANDOFF_TEXT, { handoff: true }), 200, origin);
   }
 }

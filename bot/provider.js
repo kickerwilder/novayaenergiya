@@ -101,4 +101,4 @@ async function generate(env, { model, system, contents, tools, deadline }) {
   return { content: { role: "model", parts }, text, calls, finishReason: cand.finishReason || "" };
 }
 
-module.exports = { generate, ProviderError };
+module.exports = { generate, ProviderError, transport };

@@ -25,7 +25,7 @@ function fakeModel(steps) {
   };
 }
 async function ask(messages, steps) {
-  const env = { __fakeModel: fakeModel(steps), RATE_LIMIT: "100000", DAILY_CAP: "1000000", TIMEOUT_MS: "5000" };
+  const env = { __fakeModel: fakeModel(steps), ALLOW_LOCALHOST: "1", RATE_LIMIT: "100000", DAILY_CAP: "1000000", TIMEOUT_MS: "5000" };
   const req = new Request("http://bot.local/chat", {
     method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:38800" },
     body: JSON.stringify({ messages }),
@@ -97,7 +97,7 @@ async function ask(messages, steps) {
   });
   await test("системная инструкция содержит информацию владельца из kb.owner_confirmed (тип розеток, генератор дословно, внешний MPPT)", async () => {
     let system = "";
-    const env = { __fakeModel: async (a) => { system = a.system; return { content: { role: "model", parts: [{ text: "ок" }] }, text: "ок", calls: [], finishReason: "STOP" }; }, RATE_LIMIT: "100000", DAILY_CAP: "1000000" };
+    const env = { __fakeModel: async (a) => { system = a.system; return { content: { role: "model", parts: [{ text: "ок" }] }, text: "ок", calls: [], finishReason: "STOP" }; }, ALLOW_LOCALHOST: "1", RATE_LIMIT: "100000", DAILY_CAP: "1000000" };
     const req = new Request("http://bot.local/chat", { method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:38800" }, body: JSON.stringify({ messages: [{ role: "user", text: "q" }] }) });
     await handle(req, env);
     const oc = JSON.parse(require("fs").readFileSync(path.join(__dirname, "..", "data", "kb.json"), "utf8")).owner_confirmed;
