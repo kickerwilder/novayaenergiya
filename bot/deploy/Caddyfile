@@ -1,0 +1,125 @@
+# Шаблон Caddyfile для VPS (Ubuntu 24.04, Caddy 2.7+). Копируется в /etc/caddy/Caddyfile, перед включением: caddy validate --config /etc/caddy/Caddyfile
+# Секретов и IP здесь нет. Порядок запуска и проверки: bot/DEPLOY.md.
+#
+# Два сервиса на одном сервере:
+#   1) bot.novaya-energy.ru  — бот (reverse proxy на 127.0.0.1:8787), закрыт от индексации; на основной домен это НЕ распространяется
+#   2) novaya-energy.ru и www — сайт из /srv/site (статические файлы)
+
+{
+	# e-mail для уведомлений Let's Encrypt (замените на свой)
+	email ВАШ_EMAIL
+}
+
+# Общие заголовки безопасности (подключаются во всех блоках)
+(security_headers) {
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+		# HSTS включить ТОЛЬКО после проверки HTTPS на всех адресах (снять комментарий и перезагрузить Caddy):
+		# Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+}
+
+# Раздача сайта из /srv/site (общая для основного домена и временного preview)
+(site_files) {
+	root * /srv/site
+	encode zstd gzip
+	import security_headers
+
+	# --- внутренние пути закрыты (404). Список совпадает с exclude в _config.yml (GitHub Pages) и с исключениями деплоя (.github/workflows/deploy.yml)
+	@internal path /data/source /data/source/* /data/naming.json /README.md /SKILL.md /scripts /scripts/* /tests /tests/* /bot /bot/* /.claude /.claude/* /.git /.git/* /.github /.github/* /_config.yml /CNAME /Gemfile /Gemfile.lock /vendor/* /node_modules/*
+	# служебные расширения и файлы разработки
+	@internal_ext path *.md *.py *.yml *.yaml *.env *.sh *.lock /package.json /package-lock.json /Dockerfile /docker-compose.yml
+	# любые файлы и каталоги с точки (кроме /.well-known/)
+	@dotfiles {
+		path_regexp dotfiles (^|/)\.
+		not path /.well-known/*
+	}
+	handle @internal {
+		error 404
+	}
+	handle @internal_ext {
+		error 404
+	}
+	handle @dotfiles {
+		error 404
+	}
+
+	# --- всё остальное: обычные файлы (robots.txt, sitemap.xml, файл ключа IndexNow <ключ>.txt, data/*.js, data/kb.json, картинки и т. д.)
+	handle {
+		# кэш: html короткий; css и js на сутки (в адресе нет версии); картинки и видео на неделю; шрифты на год
+		@html path / *.html
+		header @html Cache-Control "public, max-age=300, must-revalidate"
+		@code path *.css *.js
+		header @code Cache-Control "public, max-age=86400"
+		@data path /data/*.json
+		header @data Cache-Control "public, max-age=300, must-revalidate"
+		@media path *.png *.jpg *.jpeg *.webp *.svg *.ico *.mp4
+		header @media Cache-Control "public, max-age=604800"
+		@fonts path *.woff2 *.woff
+		header @fonts Cache-Control "public, max-age=31536000, immutable"
+		@seo path /robots.txt /sitemap.xml
+		header @seo Cache-Control "public, max-age=3600"
+
+		# file_server сам отдаёт Range-запросы (частичные ответы 206): нужно для img/hero.mp4
+		file_server
+	}
+
+	# --- свой 404 из /srv/site/404.html с кодом 404
+	handle_errors {
+		@notfound expression {err.status_code} == 404
+		handle @notfound {
+			rewrite * /404.html
+			file_server
+		}
+	}
+}
+
+# ---------------------------------------------------------------------------------------------------------
+# 1) Бот. HTTPS выпускается автоматически. Поддомен закрыт от поисковиков: заголовок и robots.txt с Disallow: /
+# ---------------------------------------------------------------------------------------------------------
+bot.novaya-energy.ru {
+	encode zstd gzip
+	import security_headers
+	header X-Robots-Tag "noindex, nofollow"
+
+	handle /robots.txt {
+		header Content-Type "text/plain; charset=utf-8"
+		respond <<TXT
+			User-agent: *
+			Disallow: /
+			TXT 200
+	}
+
+	handle {
+		# бот слушает только 127.0.0.1 (docker-compose публикует порт на локальный адрес)
+		reverse_proxy 127.0.0.1:8787
+	}
+}
+
+# ---------------------------------------------------------------------------------------------------------
+# 2) Сайт. Канонический адрес: https://novaya-energy.ru/ (без www; так указано в canonical и sitemap.xml),
+#    поэтому www редиректит на него; адреса страниц не меняются.
+# ---------------------------------------------------------------------------------------------------------
+www.novaya-energy.ru {
+	redir https://novaya-energy.ru{uri} permanent
+}
+
+novaya-energy.ru {
+	import site_files
+}
+
+# ---------------------------------------------------------------------------------------------------------
+# Временный адрес для проверки сайта до переключения DNS: раскомментировать, добавить A-запись preview.novaya-energy.ru
+# на сервер; после переключения DNS блок удалить. Закрыт от индексации и паролем.
+# Хэш пароля: caddy hash-password  (вставить вместо ХЭШ_ПАРОЛЯ)
+# ---------------------------------------------------------------------------------------------------------
+# preview.novaya-energy.ru {
+# 	header X-Robots-Tag "noindex, nofollow"
+# 	basic_auth {
+# 		preview ХЭШ_ПАРОЛЯ
+# 	}
+# 	import site_files
+# }
