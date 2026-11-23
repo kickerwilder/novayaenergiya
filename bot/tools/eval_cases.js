@@ -230,6 +230,7 @@ async function main() {
       break;
     }
     rows.push({ id: c.id, status: res.ok ? "PASS" : (stuck ? "НЕ ПРОВЕРЕН" : "FAIL"), attempts, ms, pin: usage.prompt - t0, pout: usage.completion - o0, calls: usage.calls - c0, missing: usage.missing - m0, note: res.ok ? "" : (stuck ? "ответ модели не получен: 429 или сбой провайдера" : res.fails.join("; ").slice(0, 160)) });
+    out("  [" + rows.length + "/" + cases.length + "] " + c.id + ": " + rows[rows.length - 1].status + (attempts > 1 ? " (попыток " + attempts + ")" : ""));   /* прогресс: длинный прогон не молчит до конца */
     await sleep(delayMs);
   }
 
