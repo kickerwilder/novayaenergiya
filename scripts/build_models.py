@@ -9,9 +9,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import analytics  # noqa: E402
 import naming as nm  # noqa: E402
 
 NAMING = nm.load()  # единственный источник наименований товара: data/naming.json
+SEO = analytics.load()  # коды верификации и счётчик Метрики (scripts/seo.json): на страницах моделей только счётчик, если он задан
 
 ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = ROOT / "models"
@@ -181,6 +183,7 @@ def build_page(combo, data, prices, charge, all_combos):
             "alternateName": nm.alternate_name(NAMING, power, cap),
             "sku": art,
             "mpn": art,
+            "url": canonical,
             "brand": {"@type": "Brand", "name": SITE_NAME},
             "description": desc_first,  # поисковые формулировки в JSON-LD только в alternateName
             "image": f"{SITE_URL}{combo['vers'][keys[0]]['img']}",
@@ -271,12 +274,14 @@ def build_page(combo, data, prices, charge, all_combos):
         sock_text = "; ".join(v_obj["sockets"])
 
         disp = "" if k == default_v else ' style="display:none"'
+        # главное фото: у видимой панели приоритет загрузки, у скрытой (второй корпус) отложенная загрузка
+        img_attr = ' fetchpriority="high"' if k == default_v else ' loading="lazy"'
         pane = (
             f'<div class="v-pane" id="pane-{k}"{disp}>'
             f'  <div class="model-layout">'
             f'    <div class="model-gallery">'
             f'      <div class="model-img-box">'
-            f'        <img src="../{esc(v_obj["img"])}" alt="{esc(combo["title"])} ({esc(data["versions"][k]["name"])})" width="1200" height="896">'
+            f'        <img src="../{esc(v_obj["img"])}" alt="{esc(combo["title"])} ({esc(data["versions"][k]["name"])})" width="1200" height="896"{img_attr}>'
             f'      </div>'
             f'      {switch_html}'
             f'    </div>'
@@ -377,6 +382,8 @@ def build_page(combo, data, prices, charge, all_combos):
             for k in vers_keys)
 
     # Сборка финального HTML
+    snippet = analytics.metrika_snippet(SEO)
+    METRIKA = ("\n" + snippet) if snippet else ""
     doc = f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -396,7 +403,9 @@ def build_page(combo, data, prices, charge, all_combos):
 <link rel="icon" href="../favicon.svg?v=2" type="image/svg+xml">
 <link rel="icon" href="../favicon.ico?v=2" sizes="48x48">
 <link rel="apple-touch-icon" href="../apple-touch-icon.png?v=2">
-<link rel="stylesheet" href="../assets/styles.css">
+<link rel="preload" href="../fonts/geologica-700-cyr.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../fonts/onest-400-cyr.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../assets/styles.css">{METRIKA}
 <script type="application/ld+json">{json.dumps(prod_ld, ensure_ascii=False, separators=(',', ':'))}</script>
 </head>
 <body>
