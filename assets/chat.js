@@ -2,6 +2,7 @@
    Ответы приходят от бэкенда бота: {reply, cards, handoff}. Цифры считает код бота, виджет их только показывает. */
 (function () {
   "use strict";
+  window.neGoal = window.neGoal || function () {};   /* цели веб-аналитики: без счётчика ничего не делает */
   var cfg = null, panel, logEl, form, input, sendBtn, quickEl, closeBtn, built = false, busy = false, opened = false;
   var msgs = [];      /* что отправляется боту: [{role, text}] */
   var ui = [];        /* что показано в ленте (для восстановления из sessionStorage) */
@@ -104,11 +105,13 @@
       if (!item.text) throw new Error("empty");
       msgs.push({ role: "assistant", text: item.text }); ui.push(item); store(true);
       setBusy(false); render(item);
+      if (item.handoff) window.neGoal("handoff_shown");
     }).catch(function () {
       clearTimeout(timer);
       var item = { role: "bot", text: "Сейчас не могу ответить, позвоните " + PHONE + " или напишите на " + EMAIL, cards: [], handoff: true };
       msgs.pop(); ui.push(item); store(true);   /* сообщение клиента не попадает в историю, если ответа не было */
       setBusy(false); render(item);
+      window.neGoal("handoff_shown");   /* бот недоступен: показаны контакты менеджера */
     });
   }
 
