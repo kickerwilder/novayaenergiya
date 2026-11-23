@@ -10,7 +10,7 @@
   2. Между <!-- FAQ:BEGIN --> и <!-- FAQ:END --> в теле страницы: видимый блок «Частые вопросы» (<details>) из scripts/faq.json.
   3. robots.txt и sitemap.xml в корне (lastmod из git-даты файла страницы).
   4. Коды верификации и Яндекс.Метрика из scripts/seo.json (см. scripts/analytics.py): мета-теги и счётчик в <head> главной, счётчик и абзац
-     про веб-аналитику в privacy.html (маркеры <!--YM:…--> и <!--YMP:…-->); пустые значения ничего не выводят.
+     про веб-аналитику в privacy.html (маркеры <!--CC:…-->, <!--CCL:…-->, <!--YMP:…--> и <!--YMP5:…-->); пустые значения ничего не выводят.
 
 ЕДИНСТВЕННОЕ место с адресом сайта: SITE_URL ниже. При переезде на свой домен поменяйте его и перезапустите скрипт.
 Запускать после любого обновления цен (data/prices.js), каталога (data/catalog.js) или текстов (scripts/faq.json).
@@ -162,9 +162,6 @@ def seo_head(graph, seo):
         '<meta name="twitter:image:alt" content="%s">' % esc(OG_IMAGE_ALT),
         '<script type="application/ld+json">%s</script>' % ld,
     ] + analytics.verification_lines(seo)
-    snippet = analytics.metrika_snippet(seo)
-    if snippet:
-        lines.append(snippet)
     return "\n".join(lines)
 
 
@@ -201,6 +198,14 @@ def replace_inline(text, begin, end, body):
         sys.exit("Ожидалась ровно одна пара маркеров %s ... %s" % (begin, end))
     repl = begin + ("\n" + body + "\n" if body else "") + end
     return pat.sub(lambda m: repl, text)
+
+
+def replace_tight(text, begin, end, body):
+    """Содержимое между маркерами без переводов строк (для вставки внутрь строки текста)."""
+    pat = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.S)
+    if len(pat.findall(text)) != 1:
+        sys.exit("Ожидалась ровно одна пара маркеров %s ... %s" % (begin, end))
+    return pat.sub(lambda m: begin + body + end, text)
 
 
 def lastmod_for(rel):
@@ -245,6 +250,8 @@ def main():
     text = read(INDEX).replace("\r\n", "\n")
     text = replace_between(text, "<!-- SEO:BEGIN -->", "<!-- SEO:END -->", seo_head(graph, seo))
     text = replace_between(text, "<!-- FAQ:BEGIN -->", "<!-- FAQ:END -->", faq_block(faq), indent="  ")
+    text = replace_inline(text, "<!--CC:BEGIN-->", "<!--CC:END-->", analytics.consent_tag(seo, ""))
+    text = replace_tight(text, "<!--CCL:BEGIN-->", "<!--CCL:END-->", analytics.settings_link(seo))
     changed = [write_if_changed(INDEX, text)]
 
     robots = (
@@ -258,9 +265,17 @@ def main():
     # privacy.html: счётчик Метрики в <head> и абзац про веб-аналитику (только при подключённом счётчике, scripts/seo.json)
     priv_path = ROOT / "privacy.html"
     priv = priv_path.read_text(encoding="utf-8").replace("\r\n", "\n")
-    priv = replace_inline(priv, "<!--YM:BEGIN-->", "<!--YM:END-->", analytics.metrika_snippet(seo))
-    priv = replace_inline(priv, "<!--YMP:BEGIN-->", "<!--YMP:END-->", analytics.privacy_paragraph(seo))
+    priv = replace_inline(priv, "<!--CC:BEGIN-->", "<!--CC:END-->", analytics.consent_tag(seo, ""))
+    priv = replace_tight(priv, "<!--CCL:BEGIN-->", "<!--CCL:END-->", analytics.settings_link(seo))
+    priv = replace_inline(priv, "<!--YMP:BEGIN-->", "<!--YMP:END-->", analytics.privacy_section(seo))
+    priv = replace_inline(priv, "<!--YMP5:BEGIN-->", "<!--YMP5:END-->", analytics.privacy_transfer(seo))
     changed.append(write_if_changed(priv_path, priv))
+
+    # 404.html: страница открывается по любому несуществующему адресу, поэтому пути к файлам абсолютные
+    nf_path = ROOT / "404.html"
+    nf = nf_path.read_text(encoding="utf-8").replace("\r\n", "\n")
+    nf = replace_inline(nf, "<!--CC:BEGIN-->", "<!--CC:END-->", analytics.consent_tag(seo, "/"))
+    changed.append(write_if_changed(nf_path, nf))
 
     # sitemap.xml: только канонические страницы; lastmod берётся из git-даты соответствующего файла (если в файле есть незакоммиченные
     # правки или файл новый, то сегодняшняя дата); без исключённых путей (внутренние файлы в карту не попадают)
@@ -278,7 +293,7 @@ def main():
 
     print("Product: %d (с ценой: %d, без цены: %d); FAQ: %d вопросов" % (n_prod, n_priced, n_unpriced, len(faq)))
     print("title: %d симв., description: %d симв." % (len(TITLE), len(DESCRIPTION)))
-    print("Изменено файлов: %d из 4 (index.html, robots.txt, privacy.html, sitemap.xml)" % sum(changed))
+    print("Изменено файлов: %d из 5 (index.html, robots.txt, privacy.html, 404.html, sitemap.xml)" % sum(changed))
 
 
 if __name__ == "__main__":

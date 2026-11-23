@@ -462,16 +462,22 @@ body.has-chat .to-top{bottom:76px;right:20px}
   .to-top{display:none !important}
 }
 
-/* плашка куки (152-ФЗ) */
-.cookie-banner{position:fixed;left:20px;bottom:20px;z-index:50;max-width:440px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 18px;box-shadow:0 10px 30px rgba(27,33,39,.18);display:flex;align-items:center;gap:14px;font-size:13.5px;line-height:1.4}
+/* согласие на аналитические cookie (assets/consent.js): две равнозначные кнопки, баннер не закрывает кнопки связи и чат */
+.cookie-banner{position:fixed;left:20px;bottom:20px;z-index:50;max-width:460px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 18px;box-shadow:0 10px 30px rgba(27,33,39,.18);font-size:13.5px;line-height:1.45}
 .cookie-banner[hidden]{display:none}
-.cookie-text{flex:1}
+.cookie-banner:focus{outline:none}
+.cookie-banner:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.cookie-text{margin:0 0 12px}
 .cookie-text a{color:var(--accent-ink);text-decoration:underline}
-.cookie-banner .btn{flex-shrink:0;min-height:38px;padding:0 14px;font-size:13.5px}
+.cookie-actions{display:flex;gap:10px}
+.cookie-actions .btn{flex:1 1 0;min-height:44px;padding:0 14px;font-size:14px}
 @media (max-width:760px){
-  .cookie-banner{left:10px;right:10px;bottom:calc(66px + env(safe-area-inset-bottom) + 8px);max-width:none;padding:12px 14px;font-size:12.5px;gap:10px}
-  .cookie-banner .btn{min-height:36px;padding:0 12px;font-size:13px}
+  .cookie-banner{left:10px;right:10px;bottom:calc(66px + env(safe-area-inset-bottom) + 8px);max-width:none;padding:12px 14px;font-size:12.5px;line-height:1.4}
+  .cookie-text{margin-bottom:10px}
+  body.has-chat .cookie-banner{bottom:calc(66px + env(safe-area-inset-bottom) + 10px + 48px + 8px)}
 }
+.link-btn{display:inline;padding:0;border:0;background:none;color:var(--ink);font:inherit;text-decoration:underline;cursor:pointer}
+.link-btn:hover{color:var(--accent-ink)}
 
 /* правовой блок в футере (ЗоЗПП, ст. 437 ГК РФ, 152-ФЗ) */
 .foot-legal{margin:18px 0;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:13px;line-height:1.55;color:var(--muted)}

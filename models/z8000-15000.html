@@ -84,10 +84,6 @@
   <a class="btn primary" href="tel:+79787280002">Позвонить</a>
   <a class="btn" href="mailto:apv0050@gmail.com">Написать</a>
 </div>
-<div class="cookie-banner" id="cookieBanner" role="region" aria-label="Уведомление о файлах cookie" hidden>
-  <div class="cookie-text">Мы используем файлы cookie для корректной работы сайта. Оставаясь на сайте, вы соглашаетесь с <a href="../privacy.html">Политикой обработки данных</a>.</div>
-  <button type="button" class="btn sm primary" id="cookieAccept">Понятно</button>
-</div>
 <button type="button" class="to-top" id="toTop" aria-label="Наверх" title="Наверх">↑</button>
 
 <script>
@@ -119,19 +115,6 @@
     });
   }
 
-  // Cookie
-  var cb = document.getElementById("cookieBanner"), ca = document.getElementById("cookieAccept");
-  if(cb && ca){
-    try{
-      if(!localStorage.getItem("ne_cookie_consent")){
-        cb.hidden = false;
-        ca.addEventListener("click", function(){
-          localStorage.setItem("ne_cookie_consent", "1");
-          cb.hidden = true;
-        });
-      }
-    }catch(_){}
-  }
 })();
 </script>
 </body>
