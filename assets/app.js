@@ -710,21 +710,6 @@ function startSavingScroll() {
   check();
 })();
 
-/* плашка cookie (152-ФЗ) */
-(function(){
-  var b = document.getElementById("cookieBanner"), btn = document.getElementById("cookieAccept");
-  if (!b || !btn) return;
-  try {
-    if (!localStorage.getItem("ne_cookie_consent")) {
-      b.hidden = false;
-      btn.addEventListener("click", function(){
-        localStorage.setItem("ne_cookie_consent", "1");
-        b.hidden = true;
-      });
-    }
-  } catch (_) {}
-})();
-
 buildAcc(); render();
 checkInitialScroll();
 startSavingScroll();

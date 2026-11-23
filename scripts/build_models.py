@@ -382,8 +382,9 @@ def build_page(combo, data, prices, charge, all_combos):
             for k in vers_keys)
 
     # Сборка финального HTML
-    snippet = analytics.metrika_snippet(SEO)
-    METRIKA = ("\n" + snippet) if snippet else ""
+    CONSENT = analytics.consent_tag(SEO, "../")           # баннер и счётчик: только при заданном ym_counter_id (assets/consent.js)
+    CONSENT = (CONSENT + chr(10)) if CONSENT else ""
+    COOKIE_LINK = analytics.settings_link(SEO)            # «Настройки cookie» в подвале: только при заданном ym_counter_id
     doc = f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -405,7 +406,7 @@ def build_page(combo, data, prices, charge, all_combos):
 <link rel="apple-touch-icon" href="../apple-touch-icon.png?v=2">
 <link rel="preload" href="../fonts/geologica-700-cyr.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="../fonts/onest-400-cyr.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../assets/styles.css">{METRIKA}
+<link rel="stylesheet" href="../assets/styles.css">
 <script type="application/ld+json">{json.dumps(prod_ld, ensure_ascii=False, separators=(',', ':'))}</script>
 </head>
 <body>
@@ -459,7 +460,7 @@ def build_page(combo, data, prices, charge, all_combos):
     <div class="foot-legal">
       <p class="legal-seller"><strong>ИП Воробьёв Александр Павлович</strong> · ИНН 910208709968 · ОГРНИП 326911200011729<br>Республика Крым, г. Симферополь, Евпаторийское шоссе, д. 5Б, офис 1</p>
       <p class="legal-offer">Информация о ценах, характеристиках и комплектации носит информационный характер и не является публичной офертой, определяемой положениями ст. 437 ГК РФ. Точные параметры и комплектацию подтверждаем при оформлении заказа.</p>
-      <p class="legal-links"><a href="../privacy.html">Политика обработки персональных данных</a> · <a href="../index.html#contacts">Реквизиты и контакты</a></p>
+      <p class="legal-links"><a href="../privacy.html">Политика обработки персональных данных</a> · <a href="../index.html#contacts">Реквизиты и контакты</a>{COOKIE_LINK}</p>
     </div>
     <p>Время работы — расчётная оценка: ёмкость × 0,85 ÷ средняя мощность приборов. Доставка в Россию: около 25 дней.</p>
     <p class="copy">© 2026 НОВАЯ ЭНЕРДЖИ. Все права защищены.</p>
@@ -470,11 +471,7 @@ def build_page(combo, data, prices, charge, all_combos):
   <a class="btn primary" href="tel:{PHONE}">Позвонить</a>
   <a class="btn" href="mailto:{EMAIL}">Написать</a>
 </div>
-<div class="cookie-banner" id="cookieBanner" role="region" aria-label="Уведомление о файлах cookie" hidden>
-  <div class="cookie-text">Мы используем файлы cookie для корректной работы сайта. Оставаясь на сайте, вы соглашаетесь с <a href="../privacy.html">Политикой обработки данных</a>.</div>
-  <button type="button" class="btn sm primary" id="cookieAccept">Понятно</button>
-</div>
-<button type="button" class="to-top" id="toTop" aria-label="Наверх" title="Наверх">↑</button>
+{CONSENT}<button type="button" class="to-top" id="toTop" aria-label="Наверх" title="Наверх">↑</button>
 
 <script>
 (function(){{
@@ -505,19 +502,6 @@ def build_page(combo, data, prices, charge, all_combos):
     }});
   }}
 
-  // Cookie
-  var cb = document.getElementById("cookieBanner"), ca = document.getElementById("cookieAccept");
-  if(cb && ca){{
-    try{{
-      if(!localStorage.getItem("ne_cookie_consent")){{
-        cb.hidden = false;
-        ca.addEventListener("click", function(){{
-          localStorage.setItem("ne_cookie_consent", "1");
-          cb.hidden = true;
-        }});
-      }}
-    }}catch(_){{}}
-  }}
 }})();
 </script>
 </body>
