@@ -104,7 +104,11 @@ def main():
     for rel in pages:
         t = (ROOT / rel).read_text(encoding="utf-8")
         check("consent.js" not in t and "cookie-banner" not in t and "data-cookie-settings" not in t and "mc.yandex.ru" not in t, "%s: при пустом счётчике на странице есть баннер/скрипт согласия/Метрика" % rel)
-    check("Яндекс.Метрик" not in (ROOT / "privacy.html").read_text(encoding="utf-8"), "privacy.html: текст про Метрику при пустом счётчике")
+    priv_repo = (ROOT / "privacy.html").read_text(encoding="utf-8")
+    check("Яндекс.Метрик" not in priv_repo and "Яндекс" not in priv_repo, "privacy.html: текст про Метрику или Яндекс при пустом счётчике")
+    check("Сайт сам не устанавливает файлы cookie" in priv_repo and "sessionStorage" in priv_repo and "удаляются при закрытии вкладки" in priv_repo, "privacy.html: нет точного первого абзаца раздела 6 (показывается всегда)")
+    check("выбор варианта корпуса" not in priv_repo and "localStorage" not in priv_repo, "privacy.html: остался неточный прежний абзац (выбор корпуса, localStorage) при пустом счётчике")
+    check("<!--YMP5:BEGIN--><!--YMP5:END-->" in priv_repo and "<!--YMP:BEGIN--><!--YMP:END-->" in priv_repo, "privacy.html: при пустом счётчике маркеры должны стоять вплотную (ничего не выводится)")
     check(re.search(r"ne_cookie_consent", "".join((ROOT / f).read_text(encoding="utf-8") for f in ("assets/app.js", "index.html"))) is None, "остался старый ключ ne_cookie_consent")
 
     tmp, site = make_copy(TEST_ID)
@@ -115,7 +119,12 @@ def main():
             t = (site / rel).read_text(encoding="utf-8")
             check(t.count('data-ym="%s"' % TEST_ID) == 1 and "assets/consent.js" in t, "%s (копия): нет тега consent.js с тестовым счётчиком" % rel)
             if rel not in ("404.html",): check("data-cookie-settings" in t, "%s (копия): нет ссылки «Настройки cookie»" % rel)
-        check("Аналитические cookie" in (site / "privacy.html").read_text(encoding="utf-8") and "Необходимые данные" in (site / "privacy.html").read_text(encoding="utf-8"), "privacy.html (копия): нет структурированного текста раздела 6")
+        priv_copy = (site / "privacy.html").read_text(encoding="utf-8")
+        check("Аналитические cookie" in priv_copy and "Необходимые данные" in priv_copy, "privacy.html (копия): нет структурированного текста раздела 6")
+        sec5 = priv_copy.split("<h2>5.")[1].split("<h2 id=\"cookies\">")[0]
+        check("Яндекс.Метрика (ООО «Яндекс») для статистики посещений" in sec5 and "При вашем согласии на аналитические cookie" in sec5, "privacy.html (копия): в разделе 5 нет фразы о передаче данных Яндекс.Метрике")
+        sec6 = priv_copy.split("<h2 id=\"cookies\">")[1].split("<h2>7.")[0]
+        check(sec6.count("sessionStorage") == 2 and "ne_y:" not in sec6 and "ne_chat_v1" not in sec6 and "ne_cookie_choice" in sec6, "privacy.html (копия): раздел 6: повтор про sessionStorage не убран или нет ключа выбора")
 
         with sync_playwright() as pw:
             br = pw.chromium.launch(channel=None if a.browser == "chromium" else a.browser,

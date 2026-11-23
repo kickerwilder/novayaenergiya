@@ -10,7 +10,7 @@
   2. Между <!-- FAQ:BEGIN --> и <!-- FAQ:END --> в теле страницы: видимый блок «Частые вопросы» (<details>) из scripts/faq.json.
   3. robots.txt и sitemap.xml в корне (lastmod из git-даты файла страницы).
   4. Коды верификации и Яндекс.Метрика из scripts/seo.json (см. scripts/analytics.py): мета-теги и счётчик в <head> главной, счётчик и абзац
-     про веб-аналитику в privacy.html (маркеры <!--CC:…-->, <!--CCL:…--> и <!--YMP:…-->); пустые значения ничего не выводят.
+     про веб-аналитику в privacy.html (маркеры <!--CC:…-->, <!--CCL:…-->, <!--YMP:…--> и <!--YMP5:…-->); пустые значения ничего не выводят.
 
 ЕДИНСТВЕННОЕ место с адресом сайта: SITE_URL ниже. При переезде на свой домен поменяйте его и перезапустите скрипт.
 Запускать после любого обновления цен (data/prices.js), каталога (data/catalog.js) или текстов (scripts/faq.json).
@@ -268,6 +268,7 @@ def main():
     priv = replace_inline(priv, "<!--CC:BEGIN-->", "<!--CC:END-->", analytics.consent_tag(seo, ""))
     priv = replace_tight(priv, "<!--CCL:BEGIN-->", "<!--CCL:END-->", analytics.settings_link(seo))
     priv = replace_inline(priv, "<!--YMP:BEGIN-->", "<!--YMP:END-->", analytics.privacy_section(seo))
+    priv = replace_inline(priv, "<!--YMP5:BEGIN-->", "<!--YMP5:END-->", analytics.privacy_transfer(seo))
     changed.append(write_if_changed(priv_path, priv))
 
     # 404.html: страница открывается по любому несуществующему адресу, поэтому пути к файлам абсолютные
