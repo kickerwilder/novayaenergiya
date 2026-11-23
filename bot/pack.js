@@ -7,6 +7,6 @@ const root = path.resolve(__dirname, "..");
 const out = path.join(__dirname, "dist");
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
-["core.js", "provider.js", "tools.js", "kb.js", "server.js", "cloud.js", "prompt.md", "package.json", "example.env"].forEach((f) => fs.copyFileSync(path.join(__dirname, f), path.join(out, f)));
+["core.js", "llm.js", "provider.js", "provider_openai.js", "dotenv.js", "pii.js", "telegram.js", "tools.js", "kb.js", "server.js", "cloud.js", "prompt.md", "package.json", "example.env"].forEach((f) => fs.copyFileSync(path.join(__dirname, f), path.join(out, f)));
 fs.copyFileSync(path.join(root, "assets", "calc.js"), path.join(out, "calc.js"));
 console.log("Готово: " + out + " (без .env). Дальше: npm install --omit=dev в этой папке и свой .env рядом.");
