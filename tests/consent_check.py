@@ -71,7 +71,8 @@ def make_copy(counter_id):
     seo_path = dst / "scripts" / "seo.json"
     seo = json.loads(seo_path.read_text(encoding="utf-8")); seo["ym_counter_id"] = counter_id
     seo_path.write_text(json.dumps(seo, ensure_ascii=False, indent=2), encoding="utf-8")
-    r = subprocess.run([sys.executable, str(dst / "scripts" / "build_all.py")], cwd=str(dst), capture_output=True, text=True, encoding="utf-8")
+    r = subprocess.run([sys.executable, str(dst / "scripts" / "build_all.py")], cwd=str(dst), capture_output=True, text=True, encoding="utf-8", errors="replace",
+                       env=dict(os.environ, PYTHONIOENCODING="utf-8"))
     if r.returncode: sys.exit("сборка копии не удалась:\n" + r.stdout[-800:] + r.stderr[-800:])
     return tmp, dst
 
@@ -118,7 +119,7 @@ def main():
 
         with sync_playwright() as pw:
             br = pw.chromium.launch(channel=None if a.browser == "chromium" else a.browser,
-                                    args=["--host-resolver-rules=MAP novaya-energy.ru 127.0.0.1, MAP www.novaya-energy.ru 127.0.0.1"])
+                                    args=["--no-proxy-server", "--host-resolver-rules=MAP novaya-energy.ru 127.0.0.1, MAP www.novaya-energy.ru 127.0.0.1"])   # без системного прокси: домены подменены на локальный сервер
             URL = "http://novaya-energy.ru:%d/" % port
             WWW = "http://www.novaya-energy.ru:%d/" % port
 
