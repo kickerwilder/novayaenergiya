@@ -487,10 +487,13 @@ document.getElementById("gl").innerHTML=D.glossary.map(function(g){return '<dt>'
     sc.onerror=function(){ waiting=null; btn.hidden=true; };
     document.head.appendChild(sc);
   }
-  btn.addEventListener("click",function(){ load(function(){window.NEchat.toggle()}); });
+  btn.addEventListener("click",function(){ window.neGoal("chat_open"); load(function(){window.NEchat.toggle()}); });
   if("requestIdleCallback" in window) requestIdleCallback(function(){load(function(){})},{timeout:8000});
   else setTimeout(function(){load(function(){})},5000);
 })();
+
+/* цели веб-аналитики: без счётчика (scripts/seo.json, ym_counter_id) window.neGoal ничего не делает */
+window.neGoal = window.neGoal || function () {};
 
 /* навигация по якорям, фиксация скролла и открытие строго с начала страницы */
 if ('scrollRestoration' in history) {

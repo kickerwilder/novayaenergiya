@@ -8,20 +8,23 @@
      Twitter, theme-color и JSON-LD (Organization, WebSite, BreadcrumbList, Product на каждую комбинацию мощности и
      ёмкости, FAQPage).
   2. Между <!-- FAQ:BEGIN --> и <!-- FAQ:END --> в теле страницы: видимый блок «Частые вопросы» (<details>) из scripts/faq.json.
-  3. robots.txt и sitemap.xml в корне.
+  3. robots.txt и sitemap.xml в корне (lastmod из git-даты файла страницы).
+  4. Коды верификации и Яндекс.Метрика из scripts/seo.json (см. scripts/analytics.py): мета-теги и счётчик в <head> главной, счётчик и абзац
+     про веб-аналитику в privacy.html (маркеры <!--YM:…--> и <!--YMP:…-->); пустые значения ничего не выводят.
 
 ЕДИНСТВЕННОЕ место с адресом сайта: SITE_URL ниже. При переезде на свой домен поменяйте его и перезапустите скрипт.
 Запускать после любого обновления цен (data/prices.js), каталога (data/catalog.js) или текстов (scripts/faq.json).
 """
-import hashlib
 import html
 import json
 import re
+import subprocess
 import sys
 from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import analytics  # noqa: E402
 import naming as nm  # noqa: E402
 
 NAMING = nm.load()  # единственный источник наименований товара: data/naming.json
@@ -90,6 +93,7 @@ def build_products(data, prices):
                 "alternateName": nm.alternate_name(NAMING, c["power"], c["cap"]),
                 "sku": art,
                 "mpn": art,
+                "url": abs_url("models/%s.html" % c["id"].lower()),
                 "brand": {"@type": "Brand", "name": SITE_NAME},
                 "description": ("%s на литий-железо-фосфатных батареях (LiFePO4): номинальная мощность %s Вт, "
                                 "ёмкость %s Вт·ч (%s кВт·ч), чистая синусоида.") % (NAMING["short"], num(c["power"]), num(c["cap"]), kwh),
@@ -134,7 +138,7 @@ def build_graph(data, prices, faq):
     return {"@context": "https://schema.org", "@graph": graph}, len(products), priced, unpriced
 
 
-def seo_head(graph):
+def seo_head(graph, seo):
     ld = json.dumps(graph, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
     lines = [
         "<title>%s</title>" % esc(TITLE),
@@ -157,7 +161,10 @@ def seo_head(graph):
         '<meta name="twitter:image" content="%s">' % esc(abs_url(OG_IMAGE)),
         '<meta name="twitter:image:alt" content="%s">' % esc(OG_IMAGE_ALT),
         '<script type="application/ld+json">%s</script>' % ld,
-    ]
+    ] + analytics.verification_lines(seo)
+    snippet = analytics.metrika_snippet(seo)
+    if snippet:
+        lines.append(snippet)
     return "\n".join(lines)
 
 
@@ -187,6 +194,29 @@ def replace_between(text, begin, end, body, indent=""):
     return pat.sub(lambda m: repl, text)
 
 
+def replace_inline(text, begin, end, body):
+    """Содержимое между маркерами (если body пустое, маркеры стоят вплотную)."""
+    pat = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.S)
+    if len(pat.findall(text)) != 1:
+        sys.exit("Ожидалась ровно одна пара маркеров %s ... %s" % (begin, end))
+    repl = begin + ("\n" + body + "\n" if body else "") + end
+    return pat.sub(lambda m: repl, text)
+
+
+def lastmod_for(rel):
+    """Дата для <lastmod>: дата последнего коммита файла; для изменённого или нового файла сегодняшняя; без git — дата изменения файла."""
+    try:
+        dirty = subprocess.run(["git", "status", "--porcelain", "--", rel], cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8", check=True).stdout.strip()
+        if dirty:
+            return date.today().isoformat()
+        last = subprocess.run(["git", "log", "-1", "--format=%cs", "--", rel], cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8", check=True).stdout.strip()
+        if last:
+            return last
+    except Exception:
+        pass
+    return date.fromtimestamp((ROOT / rel).stat().st_mtime).isoformat()
+
+
 def write_if_changed(path, text):
     old = path.read_text(encoding="utf-8") if path.exists() else None
     if old == text.replace("\r\n", "\n") or (old is not None and old.replace("\r\n", "\n") == text):
@@ -210,9 +240,10 @@ def main():
     if (min(pw), max(pw), min(cp), max(cp)) != (800, 8000, 1500, 23000):
         print("ВНИМАНИЕ: диапазоны каталога изменились, обновите DESCRIPTION в build_seo.py: мощность %d–%d Вт, ёмкость %d–%d Вт·ч" % (min(pw), max(pw), min(cp), max(cp)))
 
+    seo = analytics.load()
     graph, n_prod, n_priced, n_unpriced = build_graph(data, prices, faq)
     text = read(INDEX).replace("\r\n", "\n")
-    text = replace_between(text, "<!-- SEO:BEGIN -->", "<!-- SEO:END -->", seo_head(graph))
+    text = replace_between(text, "<!-- SEO:BEGIN -->", "<!-- SEO:END -->", seo_head(graph, seo))
     text = replace_between(text, "<!-- FAQ:BEGIN -->", "<!-- FAQ:END -->", faq_block(faq), indent="  ")
     changed = [write_if_changed(INDEX, text)]
 
@@ -224,35 +255,30 @@ def main():
     )
     changed.append(write_if_changed(ROOT / "robots.txt", robots))
 
-    # lastmod меняется только когда поменялись данные: хэш входных файлов хранится в комментарии
-    h = hashlib.sha256()
-    for f in ("data/catalog.js", "data/prices.js", "scripts/faq.json", "data/naming.json"):
-        h.update(read(ROOT / f).replace("\r\n", "\n").encode("utf-8"))
-    digest = h.hexdigest()[:16]
+    # privacy.html: счётчик Метрики в <head> и абзац про веб-аналитику (только при подключённом счётчике, scripts/seo.json)
+    priv_path = ROOT / "privacy.html"
+    priv = priv_path.read_text(encoding="utf-8").replace("\r\n", "\n")
+    priv = replace_inline(priv, "<!--YM:BEGIN-->", "<!--YM:END-->", analytics.metrika_snippet(seo))
+    priv = replace_inline(priv, "<!--YMP:BEGIN-->", "<!--YMP:END-->", analytics.privacy_paragraph(seo))
+    changed.append(write_if_changed(priv_path, priv))
+
+    # sitemap.xml: только канонические страницы; lastmod берётся из git-даты соответствующего файла (если в файле есть незакоммиченные
+    # правки или файл новый, то сегодняшняя дата); без исключённых путей (внутренние файлы в карту не попадают)
     sm_path = ROOT / "sitemap.xml"
-    lastmod = date.today().isoformat()
-    if sm_path.exists():
-        old = sm_path.read_text(encoding="utf-8")
-        m = re.search(r"<!-- data-hash: (\w+) -->", old)
-        d = re.search(r"<lastmod>([\d-]+)</lastmod>", old)
-        if m and d and m.group(1) == digest:
-            lastmod = d.group(1)
-
-    urls = [SITE_URL, SITE_URL + "privacy.html"]
+    pages = [(SITE_URL, "index.html"), (SITE_URL + "privacy.html", "privacy.html")]
     for c in data["combos"]:
-        urls.append(SITE_URL + "models/%s.html" % c["id"].lower())
-
-    url_tags = "\n".join("  <url>\n    <loc>%s</loc>\n    <lastmod>%s</lastmod>\n  </url>" % (esc(u), lastmod) for u in urls)
+        rel = "models/%s.html" % c["id"].lower()
+        pages.append((SITE_URL + rel, rel))
+    url_tags = "\n".join("  <url>\n    <loc>%s</loc>\n    <lastmod>%s</lastmod>\n  </url>" % (esc(u), lastmod_for(rel)) for u, rel in pages)
     sitemap = ('<?xml version="1.0" encoding="UTF-8"?>\n'
-               '<!-- data-hash: %s -->\n'
                '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
                '%s\n'
-               '</urlset>\n' % (digest, url_tags))
+               '</urlset>\n' % url_tags)
     changed.append(write_if_changed(sm_path, sitemap))
 
     print("Product: %d (с ценой: %d, без цены: %d); FAQ: %d вопросов" % (n_prod, n_priced, n_unpriced, len(faq)))
     print("title: %d симв., description: %d симв." % (len(TITLE), len(DESCRIPTION)))
-    print("Изменено файлов: %d из 3 (index.html, robots.txt, sitemap.xml)" % sum(changed))
+    print("Изменено файлов: %d из 4 (index.html, robots.txt, privacy.html, sitemap.xml)" % sum(changed))
 
 
 if __name__ == "__main__":
