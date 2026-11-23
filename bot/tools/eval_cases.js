@@ -17,6 +17,7 @@
      --price-in X --price-out Y цена за МИЛЛИОН входных и выходных токенов (в любой валюте; стоимость выводится в ней же)
      --only id1,id2             только эти кейсы;   --cases путь   другой файл кейсов;   --json файл   сохранить результаты (без секретов и ключей)
      --no-env-file              не читать bot/.env (только окружение)
+     --usage-lines              после каждого кейса печатать строки llm_usage по вызовам модели (только счётчики и причина остановки, без текстов)
    Проверяются кейсы с target main (проверки те же, что в scripts/test_bot.py); кейсы, которым нужны отдельные серверы (недоступный провайдер, лимитер,
    нулевая цена), пропускаются: они от модели не зависят и запускаются через scripts/test_bot.py.
    Уведомления в Telegram на время прогона выключены. Ключи, заголовки и адрес провайдера не печатаются; в таблице только названия кейсов, провайдер и модель. */
@@ -32,7 +33,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     if (!argv[i].startsWith("--")) { console.error("Неизвестный аргумент: " + argv[i]); process.exit(2); }
     const k = argv[i].slice(2);
-    if (["no-fallback", "no-env-file", "help"].includes(k)) a[k] = true;
+    if (["no-fallback", "no-env-file", "usage-lines", "help"].includes(k)) a[k] = true;
     else { a[k] = argv[++i]; if (a[k] === undefined) { console.error("Для --" + k + " нужно значение"); process.exit(2); } }
   }
   return a;
@@ -53,12 +54,13 @@ const priceIn = args["price-in"] === undefined ? null : Number(args["price-in"])
 if ((priceIn !== null && !Number.isFinite(priceIn)) || (priceOut !== null && !Number.isFinite(priceOut))) { console.error("--price-in и --price-out: число (цена за миллион токенов)"); process.exit(2); }
 
 /* ---------- окружение прогона ---------- */
+let usageLines = [];   /* записи по вызовам модели текущего кейса (для --usage-lines) */
 const usage = { prompt: 0, completion: 0, calls: 0, missing: 0 };   /* missing: вызовы, по которым провайдер не прислал usage */
 let errors = [];
 const env = Object.assign({}, process.env, {
   ALLOW_LOCALHOST: "1", RATE_LIMIT: "1000000", DAILY_CAP: "1000000", TEST_TRACE: "1",
   TELEGRAM_BOT_TOKEN: "", TELEGRAM_MANAGER_CHAT_ID: "",
-  __onUsage: (u) => { usage.calls++; if (u.prompt_tokens === null && u.completion_tokens === null) usage.missing++; usage.prompt += u.prompt_tokens || 0; usage.completion += u.completion_tokens || 0; },
+  __onUsage: (u) => { usageLines.push(u); usage.calls++; if (u.prompt_tokens === null && u.completion_tokens === null) usage.missing++; usage.prompt += u.prompt_tokens || 0; usage.completion += u.completion_tokens || 0; },
   __onProviderError: (e) => errors.push(e),
 });
 if (args.provider) env.PROVIDER = args.provider;
@@ -217,7 +219,7 @@ async function main() {
   const rows = [];
   for (const c of cases) {
     if (c.target !== "main" || c.kind === "rate") { rows.push({ id: c.id, status: "ПРОПУСК", attempts: 0, ms: 0, pin: 0, pout: 0, calls: 0, missing: 0, note: "нужен отдельный сервер (" + c.target + "), см. scripts/test_bot.py" }); continue; }
-    const t0 = usage.prompt, o0 = usage.completion, c0 = usage.calls, m0 = usage.missing;
+    const t0 = usage.prompt, o0 = usage.completion, c0 = usage.calls, m0 = usage.missing; usageLines = [];
     let res = null, attempts = 0, ms = 0, stuck = false;
     for (let k = 0; k <= retries; k++) {
       attempts++; errors = [];
@@ -229,8 +231,12 @@ async function main() {
       stuck = providerTrouble();
       break;
     }
-    rows.push({ id: c.id, status: res.ok ? "PASS" : (stuck ? "НЕ ПРОВЕРЕН" : "FAIL"), attempts, ms, pin: usage.prompt - t0, pout: usage.completion - o0, calls: usage.calls - c0, missing: usage.missing - m0, note: res.ok ? "" : (stuck ? "ответ модели не получен: 429 или сбой провайдера" : res.fails.join("; ").slice(0, 160)) });
+    rows.push({ id: c.id, status: res.ok ? "PASS" : (stuck ? "НЕ ПРОВЕРЕН" : "FAIL"), attempts, ms, pin: usage.prompt - t0, pout: usage.completion - o0, calls: usage.calls - c0, missing: usage.missing - m0, note: res.ok ? "" : (stuck ? "ответ модели не получен: " + [...new Set(errors.map((e) => e.kind + (e.status ? " " + e.status : "")))].join(", ") : res.fails.join("; ").slice(0, 160)) });
     out("  [" + rows.length + "/" + cases.length + "] " + c.id + ": " + rows[rows.length - 1].status + (attempts > 1 ? " (попыток " + attempts + ")" : ""));   /* прогресс: длинный прогон не молчит до конца */
+    if (args["usage-lines"]) {
+      const nd = (v) => (v === null || v === undefined ? "нет данных" : v);
+      for (const u of usageLines) out("      llm_usage " + JSON.stringify({ provider: u.provider, model: u.model, prompt_tokens: nd(u.prompt_tokens), completion_tokens: nd(u.completion_tokens), finish: nd(u.finish), ms: u.ms }));
+    }
     await sleep(delayMs);
   }
 
