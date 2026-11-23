@@ -53,12 +53,12 @@ const priceIn = args["price-in"] === undefined ? null : Number(args["price-in"])
 if ((priceIn !== null && !Number.isFinite(priceIn)) || (priceOut !== null && !Number.isFinite(priceOut))) { console.error("--price-in и --price-out: число (цена за миллион токенов)"); process.exit(2); }
 
 /* ---------- окружение прогона ---------- */
-const usage = { prompt: 0, completion: 0, calls: 0 };
+const usage = { prompt: 0, completion: 0, calls: 0, missing: 0 };   /* missing: вызовы, по которым провайдер не прислал usage */
 let errors = [];
 const env = Object.assign({}, process.env, {
   ALLOW_LOCALHOST: "1", RATE_LIMIT: "1000000", DAILY_CAP: "1000000", TEST_TRACE: "1",
   TELEGRAM_BOT_TOKEN: "", TELEGRAM_MANAGER_CHAT_ID: "",
-  __onUsage: (u) => { usage.prompt += u.prompt_tokens || 0; usage.completion += u.completion_tokens || 0; usage.calls++; },
+  __onUsage: (u) => { usage.calls++; if (u.prompt_tokens === null && u.completion_tokens === null) usage.missing++; usage.prompt += u.prompt_tokens || 0; usage.completion += u.completion_tokens || 0; },
   __onProviderError: (e) => errors.push(e),
 });
 if (args.provider) env.PROVIDER = args.provider;
@@ -216,8 +216,8 @@ async function main() {
   out("Оценка моделей: provider=" + providerName(env) + " model=" + (env.MODEL || "(по умолчанию)") + " fallback=" + (env.FALLBACK_MODEL || "нет") + "; кейсов: " + cases.length + ", пауза " + delayMs + " мс, повторов при 429: " + retries);
   const rows = [];
   for (const c of cases) {
-    if (c.target !== "main" || c.kind === "rate") { rows.push({ id: c.id, status: "ПРОПУСК", attempts: 0, ms: 0, pin: 0, pout: 0, note: "нужен отдельный сервер (" + c.target + "), см. scripts/test_bot.py" }); continue; }
-    const t0 = usage.prompt, o0 = usage.completion;
+    if (c.target !== "main" || c.kind === "rate") { rows.push({ id: c.id, status: "ПРОПУСК", attempts: 0, ms: 0, pin: 0, pout: 0, calls: 0, missing: 0, note: "нужен отдельный сервер (" + c.target + "), см. scripts/test_bot.py" }); continue; }
+    const t0 = usage.prompt, o0 = usage.completion, c0 = usage.calls, m0 = usage.missing;
     let res = null, attempts = 0, ms = 0, stuck = false;
     for (let k = 0; k <= retries; k++) {
       attempts++; errors = [];
@@ -229,25 +229,35 @@ async function main() {
       stuck = providerTrouble();
       break;
     }
-    rows.push({ id: c.id, status: res.ok ? "PASS" : (stuck ? "НЕ ПРОВЕРЕН" : "FAIL"), attempts, ms, pin: usage.prompt - t0, pout: usage.completion - o0, note: res.ok ? "" : (stuck ? "ответ модели не получен: 429 или сбой провайдера" : res.fails.join("; ").slice(0, 160)) });
+    rows.push({ id: c.id, status: res.ok ? "PASS" : (stuck ? "НЕ ПРОВЕРЕН" : "FAIL"), attempts, ms, pin: usage.prompt - t0, pout: usage.completion - o0, calls: usage.calls - c0, missing: usage.missing - m0, note: res.ok ? "" : (stuck ? "ответ модели не получен: 429 или сбой провайдера" : res.fails.join("; ").slice(0, 160)) });
     await sleep(delayMs);
   }
 
   /* ---------- таблица ---------- */
+  /* токены и стоимость: «нет данных», если провайдер не прислал usage ни по одному вызову кейса; «≥N», если не по всем */
+  const noData = (r) => r.calls > 0 && r.missing === r.calls, partial = (r) => r.missing > 0 && r.missing < r.calls;
   const cost = (r) => (priceIn === null || priceOut === null ? null : (r.pin * priceIn + r.pout * priceOut) / 1e6);
   const fmt = (x) => (x === null ? "-" : x.toFixed(x < 0.01 ? 5 : 4));
+  const tok = (r, n) => (noData(r) ? "нет данных" : (partial(r) ? "≥" : "") + n);
+  const money = (r) => (noData(r) ? "нет данных" : (partial(r) ? "≥" : "") + fmt(cost(r)));
   const w = Math.max(5, ...rows.map((r) => r.id.length));
-  out("\n" + "кейс".padEnd(w) + "  " + "итог".padEnd(11) + " " + "попыт".padStart(5) + " " + "время,с".padStart(8) + " " + "ток.вх".padStart(8) + " " + "ток.вых".padStart(8) + " " + "стоимость".padStart(10) + "  примечание");
-  for (const r of rows) out(r.id.padEnd(w) + "  " + r.status.padEnd(11) + " " + String(r.attempts).padStart(5) + " " + (r.ms / 1000).toFixed(1).padStart(8) + " " + String(r.pin).padStart(8) + " " + String(r.pout).padStart(8) + " " + fmt(cost(r)).padStart(10) + "  " + r.note);
+  out("\n" + "кейс".padEnd(w) + "  " + "итог".padEnd(11) + " " + "попыт".padStart(5) + " " + "время,с".padStart(8) + " " + "ток.вх".padStart(10) + " " + "ток.вых".padStart(10) + " " + "стоимость".padStart(11) + "  примечание");
+  for (const r of rows) out(r.id.padEnd(w) + "  " + r.status.padEnd(11) + " " + String(r.attempts).padStart(5) + " " + (r.ms / 1000).toFixed(1).padStart(8) + " " + String(tok(r, r.pin)).padStart(10) + " " + String(tok(r, r.pout)).padStart(10) + " " + String(money(r)).padStart(11) + "  " + r.note);
   const ran = rows.filter((r) => r.status !== "ПРОПУСК");
   const pass = rows.filter((r) => r.status === "PASS").length, fail = rows.filter((r) => r.status === "FAIL").length, stuck = rows.filter((r) => r.status === "НЕ ПРОВЕРЕН").length;
   const tin = ran.reduce((s, r) => s + r.pin, 0), tout = ran.reduce((s, r) => s + r.pout, 0);
+  const noDataCases = ran.filter((r) => r.missing > 0).length;
   const total = priceIn === null || priceOut === null ? null : (tin * priceIn + tout * priceOut) / 1e6;
   out("\nИтого: прошло " + pass + " из " + ran.length + ", не прошло " + fail + ", не проверено из-за 429 или сбоя провайдера " + stuck + ", пропущено " + (rows.length - ran.length));
-  out("Токены: вход " + tin + ", выход " + tout + " (в среднем на кейс: " + (ran.length ? Math.round(tin / ran.length) : 0) + " и " + (ran.length ? Math.round(tout / ran.length) : 0) + ")");
+  const calls = ran.reduce((s, r) => s + r.calls, 0), missing = ran.reduce((s, r) => s + r.missing, 0);
+  if (calls > 0 && missing === calls) out("Токены: нет данных (провайдер не присылает usage)");
+  else {
+    out("Токены: вход " + tin + ", выход " + tout + " (в среднем на кейс: " + (ran.length ? Math.round(tin / ran.length) : 0) + " и " + (ran.length ? Math.round(tout / ran.length) : 0) + ")" + (noDataCases ? "; по " + noDataCases + " кейсам данные неполные или отсутствуют, суммы занижены" : ""));
+  }
   if (total === null) out("Стоимость: не считалась (задайте --price-in и --price-out: цена за миллион токенов)");
-  else out("Стоимость всех кейсов: " + fmt(total) + " (вход " + priceIn + " + выход " + priceOut + " за млн токенов); в среднем на кейс: " + fmt(ran.length ? total / ran.length : 0));
-  if (args.json) fs.writeFileSync(args.json, JSON.stringify({ provider: providerName(env), model: env.MODEL || null, fallback: env.FALLBACK_MODEL || null, price_in: priceIn, price_out: priceOut, rows, totals: { pass, fail, not_checked: stuck, tokens_in: tin, tokens_out: tout, cost: total } }, null, 1), "utf8");
+  else if (calls > 0 && missing === calls) out("Стоимость: нет данных (нет счётчиков токенов)");
+  else out("Стоимость всех кейсов: " + (noDataCases ? "≥" : "") + fmt(total) + " (вход " + priceIn + " + выход " + priceOut + " за млн токенов); в среднем на кейс: " + fmt(ran.length ? total / ran.length : 0));
+  if (args.json) fs.writeFileSync(args.json, JSON.stringify({ provider: providerName(env), model: env.MODEL || null, fallback: env.FALLBACK_MODEL || null, price_in: priceIn, price_out: priceOut, rows, totals: { pass, fail, not_checked: stuck, tokens_in: tin, tokens_out: tout, cost: total, calls, calls_without_usage: missing } }, null, 1), "utf8");
   process.exit(fail ? 1 : 0);
 }
 

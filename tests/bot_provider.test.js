@@ -168,10 +168,6 @@ async function captureLogs(fn) {
       assert.deepStrictEqual(m.filter((x) => x.role === "tool").map((x) => JSON.parse(x.content).code), ["ZF16-2005", "ZF28-2003.8"]);
     } finally { await srv.close(); }
   });
-  await test("аргументы вызова не JSON: вызов не теряется, args = {}", () => {
-    const r = oa.fromResponse({ choices: [{ message: { content: null, tool_calls: [{ id: "x", type: "function", function: { name: "get_station", arguments: "{oops" } }] } }] });
-    assert.deepStrictEqual(r.calls, [{ name: "get_station", args: {}, id: "x" }]);
-  });
   await test("через ядро (core.js) целиком: инструмент вызывается, карточки собираются, клиент видит итоговый текст", async () => {
     const srv = await fakeServer((req, n) => n === 1
       ? okTools([{ name: "get_station", args: { code: "ZF16-2005" } }, { name: "list_stations", args: { sort_by: "power", limit: 2 } }])
@@ -394,7 +390,8 @@ async function captureLogs(fn) {
       const line = logs.find((l) => l.startsWith("llm_usage "));
       assert.ok(line, logs.join(" | "));
       const j = JSON.parse(line.slice("llm_usage ".length));
-      assert.deepStrictEqual(Object.keys(j).sort(), ["completion_tokens", "model", "ms", "prompt_tokens", "provider"]);
+      assert.deepStrictEqual(Object.keys(j).sort(), ["completion_tokens", "finish", "model", "ms", "prompt_tokens", "provider"]);
+      assert.strictEqual(j.finish, "STOP");
       assert.strictEqual(j.prompt_tokens, 321); assert.strictEqual(j.completion_tokens, 45); assert.strictEqual(j.model, "m-main"); assert.strictEqual(j.provider, "openai");
       assert.ok(Number.isInteger(j.ms) && j.ms >= 0);
       assert.strictEqual(seen.length, 1);
@@ -434,7 +431,7 @@ async function captureLogs(fn) {
       assert.strictEqual(q.headers["x-goog-api-key"], KEY);
       assert.ok(q.body.systemInstruction && Array.isArray(q.body.contents) && q.body.tools[0].functionDeclarations.length === tools.declarations.length);
       assert.deepStrictEqual(srv.requests[1].body.contents.map((c) => c.role), ["user", "model", "user"], "в историю ушли вызов и результат инструмента");
-      assert.deepStrictEqual(seen[0], { provider: "gemini", model: "g-main", prompt_tokens: 20, completion_tokens: 8, ms: seen[0].ms });
+      assert.deepStrictEqual(seen[0], { provider: "gemini", model: "g-main", prompt_tokens: 20, completion_tokens: 8, finish: "STOP", ms: seen[0].ms });
       assert.ok(!logs.join("\n").includes(KEY));
     } finally { await srv.close(); }
   });
@@ -467,6 +464,151 @@ async function captureLogs(fn) {
       const t = fs.readFileSync(path.join(BOT, f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
       assert.ok(!/openai|chat\/completions|generateContent|x-goog/i.test(t), f);
     }
+  });
+
+  out("особенности моделей: рассуждения, обрыв по длине, аргументы, finish_reason, usage");
+  const msgResp = (message, finish, usage) => ({ status: 200, body: { choices: [{ index: 0, message: Object.assign({ role: "assistant" }, message), finish_reason: finish === undefined ? "stop" : finish }], usage: usage === undefined ? USAGE : usage } });
+  const raise = (data) => { try { oa.fromResponse(data); } catch (e) { return e; } return null; };
+
+  await test("а) reasoning_content и reasoning игнорируются, <think>…</think> вырезается; в историю и в лог рассуждения не попадают", async () => {
+    const R1 = "РАССУЖДЕНИЕ_ПОЛЕ_А", R2 = "РАССУЖДЕНИЕ_ПОЛЕ_Б", R3 = "РАССУЖДЕНИЕ_В_ТЕГЕ";
+    const r = oa.fromResponse({ choices: [{ message: { content: "<think>" + R3 + "</think>Ответ клиенту", reasoning_content: R1, reasoning: R2 }, finish_reason: "stop" }] });
+    assert.strictEqual(r.text, "Ответ клиенту");
+    assert.ok(![R1, R2, R3].some((x) => JSON.stringify(r).includes(x)), "рассуждения попали в результат адаптера (а значит и в историю)");
+    assert.strictEqual(oa.fromResponse({ choices: [{ message: { content: "<think>раз</think>Один <thinking>два</thinking>Два" } }] }).text, "Один Два");
+    assert.strictEqual(oa.fromResponse({ choices: [{ message: { content: "Ответ <think>дальше оборвано" } }] }).text, "Ответ", "оборванный блок без закрывающего тега");
+    assert.strictEqual(oa.fromResponse({ choices: [{ message: { content: "хвост рассуждений</think>Готовый ответ" } }] }).text, "Готовый ответ", "одинокий закрывающий тег");
+    /* сквозной сценарий: вызов инструмента с рассуждениями, затем ответ; во втором запросе рассуждений нет, в логах тоже */
+    const srv = await fakeServer((req, n) => n === 1
+      ? msgResp({ content: "<think>" + R3 + "</think>", reasoning_content: R1, reasoning: R2, tool_calls: [{ id: "c1", type: "function", function: { name: "get_station", arguments: '{"code":"ZF16-2005"}' } }] }, "tool_calls")
+      : msgResp({ content: "<think>" + R3 + "</think>Станция подходит.", reasoning_content: R1 }));
+    try {
+      let out1;
+      const logs = await captureLogs(async () => { out1 = await ask(openaiEnv(srv)); });
+      assert.strictEqual(out1.json.reply, "Станция подходит.");
+      const all = JSON.stringify(srv.requests[1].body.messages);
+      assert.ok(![R1, R2, R3, "reasoning"].some((x) => all.includes(x)), "рассуждения ушли в историю второго запроса: " + all.slice(0, 200));
+      assert.ok(![R1, R2, R3].some((x) => logs.join("\n").includes(x)), "рассуждения попали в лог");
+    } finally { await srv.close(); }
+  });
+
+  await test("б) пустой текст при finish_reason=length и без вызовов — сбой length (не пустой ответ клиенту)", async () => {
+    assert.strictEqual(raise({ choices: [{ message: { content: "", reasoning_content: "думал долго" }, finish_reason: "length" }] }).kind, "length");
+    assert.strictEqual(raise({ choices: [{ message: { content: "<think>обрыв внутри рассуждения" }, finish_reason: "length" }] }).kind, "length", "после вырезания рассуждений текста нет");
+    assert.strictEqual(raise({ choices: [{ message: { content: null }, finish_reason: "stop" }] }).kind, "empty", "пусто при stop остаётся empty");
+    const r = oa.fromResponse({ choices: [{ message: { content: "Непустой, но обрезанный от" }, finish_reason: "length" }] });
+    assert.strictEqual(r.text, "Непустой, но обрезанный от"); assert.strictEqual(r.finishReason, "MAX_TOKENS");
+    assert.strictEqual(oa.fromResponse({ choices: [{ message: { content: "", tool_calls: [{ id: "x", type: "function", function: { name: "get_station", arguments: "{}" } }] }, finish_reason: "length" }] }).calls.length, 1, "вызов инструмента при length не теряется");
+    /* цепочка: основная модель обрезана -> запасная отвечает */
+    const srv = await fakeServer((req) => req.body.model === "m-fb" ? okText("из запасной") : msgResp({ content: "" }, "length"));
+    try {
+      const o = await ask(openaiEnv(srv));
+      assert.strictEqual(o.json.reply, "из запасной");
+      assert.deepStrictEqual(srv.requests.map((q) => q.body.model), ["m-main", "m-fb"]);
+    } finally { await srv.close(); }
+    /* обе обрезаны -> контакты менеджера, в логе вид сбоя */
+    const srv2 = await fakeServer(() => msgResp({ content: "" }, "length"));
+    try {
+      const logs = await captureLogs(async () => {
+        const o = await ask(openaiEnv(srv2));
+        assert.strictEqual(o.json.reply, core.HANDOFF_TEXT); assert.strictEqual(o.json.handoff, true);
+      });
+      assert.ok(logs.some((l) => /^chat_error: length$/.test(l)), logs.join(" | "));
+    } finally { await srv2.close(); }
+  });
+
+  await test("в) arguments: строка JSON, пустая строка, null, готовый объект; невалидный JSON — сбой bad_args с переходом к запасной модели", async () => {
+    const call = (a) => oa.fromResponse({ choices: [{ message: { tool_calls: [{ id: "k", type: "function", function: { name: "get_station", arguments: a } }] } }] }).calls[0].args;
+    assert.deepStrictEqual(call('{"code":"ZF16-2005"}'), { code: "ZF16-2005" });
+    assert.deepStrictEqual(call(""), {});
+    assert.deepStrictEqual(call("   "), {});
+    assert.deepStrictEqual(call(undefined), {});
+    assert.deepStrictEqual(call(null), {});
+    assert.deepStrictEqual(call("null"), {});
+    assert.deepStrictEqual(call({ code: "ZF28-2003.8" }), { code: "ZF28-2003.8" }, "arguments уже объект");
+    for (const bad of ["{oops", "[1,2]", "42", '"строка"', ["a"]]) {
+      const e = raise({ choices: [{ message: { tool_calls: [{ id: "k", type: "function", function: { name: "get_station", arguments: bad } }] } }] });
+      assert.ok(e && e.kind === "bad_args", "для " + JSON.stringify(bad) + " ожидался сбой bad_args, получено " + (e && e.kind));
+    }
+    const badCall = msgResp({ content: null, tool_calls: [{ id: "k", type: "function", function: { name: "get_station", arguments: "{oops" } }] }, "tool_calls");
+    const srv = await fakeServer((req) => req.body.model === "m-fb" ? okText("ответ запасной модели") : badCall);
+    try {
+      let o; const logs = await captureLogs(async () => { o = await ask(openaiEnv(srv)); });
+      assert.strictEqual(o.status, 200); assert.strictEqual(o.json.reply, "ответ запасной модели");
+      assert.deepStrictEqual(srv.requests.map((q) => q.body.model), ["m-main", "m-fb"], "без повтора на той же модели");
+      assert.ok(logs.some((l) => /llm_fail .*bad_args/.test(l)));
+    } finally { await srv.close(); }
+    const srv2 = await fakeServer(() => badCall);
+    try {
+      const o = await ask(openaiEnv(srv2));
+      assert.strictEqual(o.json.reply, core.HANDOFF_TEXT);
+    } finally { await srv2.close(); }
+    /* пустая строка аргументов у инструмента без параметров доходит до ядра как {} и не ломает ход */
+    const srv3 = await fakeServer((req, n) => n === 1 ? msgResp({ content: null, tool_calls: [{ id: "k", type: "function", function: { name: "list_loads", arguments: "" } }] }, "tool_calls") : okText("Вот список."));
+    try {
+      const o = await ask(openaiEnv(srv3));
+      assert.strictEqual(o.json.reply, "Вот список."); assert.deepStrictEqual(o.json.trace.tools[0].args, {});
+    } finally { await srv3.close(); }
+  });
+
+  await test("г) вызов инструмента определяется по tool_calls, а не по finish_reason", async () => {
+    const tc = [{ id: "k", type: "function", function: { name: "get_station", arguments: '{"code":"ZF16-2005"}' } }];
+    for (const fin of ["stop", "tool_calls", "length", "content_filter", "что-то_своё", null, undefined]) {
+      const r = oa.fromResponse({ choices: [Object.assign({ message: { content: null, tool_calls: tc } }, fin === undefined ? {} : { finish_reason: fin })] });
+      assert.strictEqual(r.calls.length, 1, "finish_reason=" + fin + ": вызов должен быть принят");
+    }
+    /* finish_reason=tool_calls, но вызовов нет: берём текст, не падаем и не ждём инструментов */
+    const r = oa.fromResponse({ choices: [{ message: { content: "Просто текст" }, finish_reason: "tool_calls" }] });
+    assert.deepStrictEqual(r.calls, []); assert.strictEqual(r.text, "Просто текст");
+    /* сквозной: finish_reason=stop при наличии tool_calls — инструмент выполняется, затем ответ */
+    const srv = await fakeServer((req, n) => n === 1 ? msgResp({ content: null, tool_calls: tc }, "stop") : okText("Готово после инструмента"));
+    try {
+      const o = await ask(openaiEnv(srv));
+      assert.strictEqual(o.json.reply, "Готово после инструмента"); assert.deepStrictEqual(o.json.trace.tools.map((t) => t.name), ["get_station"]);
+    } finally { await srv.close(); }
+  });
+
+  await test("д) отсутствующий usage не роняет бота: в логе «нет данных», ответ клиенту обычный", async () => {
+    for (const usage of [undefined, null, "мусор", {}, { prompt_tokens: "x" }]) {
+      const srv = await fakeServer(() => ({ status: 200, body: usage === undefined ? { choices: [{ message: { content: "Ответ без usage" }, finish_reason: "stop" }] } : { choices: [{ message: { content: "Ответ без usage" }, finish_reason: "stop" }], usage } }));
+      try {
+        const seen = []; let o;
+        const logs = await captureLogs(async () => { o = await ask(openaiEnv(srv, { __onUsage: (u) => seen.push(u) })); });
+        assert.strictEqual(o.json.reply, "Ответ без usage", "usage=" + JSON.stringify(usage));
+        const j = JSON.parse(logs.find((l) => l.startsWith("llm_usage ")).slice(10));
+        assert.strictEqual(j.prompt_tokens, "нет данных"); assert.strictEqual(j.completion_tokens, "нет данных"); assert.strictEqual(j.finish, "STOP");
+        assert.deepStrictEqual([seen[0].prompt_tokens, seen[0].completion_tokens], [null, null], "в хук для eval уходят null");
+      } finally { await srv.close(); }
+    }
+    const srv = await fakeServer(() => msgResp({ content: "ок" }, "stop", { prompt_tokens: 50 }));
+    try {
+      const logs = await captureLogs(async () => { await ask(openaiEnv(srv)); });
+      const j = JSON.parse(logs.find((l) => l.startsWith("llm_usage ")).slice(10));
+      assert.strictEqual(j.prompt_tokens, 50); assert.strictEqual(j.completion_tokens, "нет данных", "частичные данные: известное пишется, неизвестное «нет данных»");
+    } finally { await srv.close(); }
+    /* Gemini без usageMetadata */
+    const g = await fakeServer(() => ({ status: 200, body: { candidates: [{ content: { role: "model", parts: [{ text: "ок" }] } }] } }));
+    try {
+      const logs = await captureLogs(async () => { const o = await ask(gemEnv(g)); assert.strictEqual(o.json.reply, "ок"); });
+      const j = JSON.parse(logs.find((l) => l.startsWith("llm_usage ")).slice(10));
+      assert.deepStrictEqual([j.prompt_tokens, j.completion_tokens, j.finish], ["нет данных", "нет данных", "нет данных"]);
+    } finally { await g.close(); }
+  });
+
+  await test("поле finish в llm_usage: причина остановки провайдера (STOP, MAX_TOKENS…), остальные строки лога без изменений", async () => {
+    const srv = await fakeServer((req, n) => n === 1 ? msgResp({ content: "Обрезано на полусл" }, "length") : { status: 429, body: {} });
+    try {
+      const logs = await captureLogs(async () => { await llm.call(openaiEnv(srv, { FALLBACK_MODEL: "" }), llmArgs()); });
+      const j = JSON.parse(logs.find((l) => l.startsWith("llm_usage ")).slice(10));
+      assert.strictEqual(j.finish, "MAX_TOKENS");
+      assert.deepStrictEqual(Object.keys(j), ["provider", "model", "prompt_tokens", "completion_tokens", "finish", "ms"]);
+    } finally { await srv.close(); }
+    const srv2 = await fakeServer(() => ({ status: 429, body: {} }));
+    try {
+      const logs = await captureLogs(async () => { await assert.rejects(llm.call(openaiEnv(srv2, { FALLBACK_MODEL: "" }), llmArgs()), (e) => e.status === 429); });
+      assert.deepStrictEqual(logs.map((l) => l.split(" ")[0]), ["llm_retry", "llm_fail"], "строки retry и fail остались прежними");
+      assert.ok(/^llm_retry \{"model":"m-main","kind":"http","status":429,"wait_ms":20\}$/.test(logs[0]), logs[0]);
+    } finally { await srv2.close(); }
   });
 
   out("скрипт оценки моделей bot/tools/eval_cases.js");
@@ -509,6 +651,17 @@ async function captureLogs(fn) {
       for (const s of [KEY, "HDRVALUE999zzz", "x-secret-header", "Bearer", srv.url, "127.0.0.1"]) assert.ok(!o.includes(s), "в выводе найдено: " + s);
       const j = JSON.parse(fs.readFileSync(jsonOut, "utf8"));
       assert.ok(!JSON.stringify(j).includes(KEY) && j.totals.pass === 3 && j.totals.not_checked === 1 && j.totals.fail === 1);
+      /* провайдер не присылает usage: в таблице «нет данных», а не нули */
+      const srvNo = await fakeServer(() => ({ status: 200, body: { choices: [{ message: { content: "Здравствуйте! Чем помочь?" }, finish_reason: "stop" }] } }));
+      try {
+        const r4 = await runNode([path.join(BOT, "tools", "eval_cases.js"), "--cases", casesFile, "--only", "ok_case", "--delay-ms", "10", "--price-in", "1", "--price-out", "2", "--no-fallback", "--no-env-file"], {
+          env: { PATH: process.env.PATH, SKIP_DOTENV: "1", PROVIDER: "openai", PROVIDER_BASE_URL: srvNo.url + "/v1", PROVIDER_API_KEY: KEY, MODEL: "m-eval" }, cwd: BOT,
+        });
+        const row4 = r4.stdout.split("\n").find((l) => l.startsWith("ok_case ")) || "";
+        assert.ok(/PASS/.test(row4) && (row4.match(/нет данных/g) || []).length === 3, "токены вх, вых и стоимость: «нет данных»: " + row4);
+        assert.ok(/Токены: нет данных/.test(r4.stdout) && /Стоимость: нет данных/.test(r4.stdout), r4.stdout);
+        assert.ok(!/NaN|undefined/.test(r4.stdout), "нет NaN и undefined в таблице");
+      } finally { await srvNo.close(); }
       /* без цен стоимость не выдумывается */
       const r2 = await runNode([path.join(BOT, "tools", "eval_cases.js"), "--cases", casesFile, "--only", "ok_case", "--delay-ms", "10", "--no-fallback", "--no-env-file"], {
         env: { PATH: process.env.PATH, SKIP_DOTENV: "1", PROVIDER: "openai", PROVIDER_BASE_URL: srv.url + "/v1", PROVIDER_API_KEY: KEY, MODEL: "m-eval" }, encoding: "utf8", timeout: 30000, cwd: BOT,

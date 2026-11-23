@@ -23,10 +23,14 @@ function modelsFor(env) {
 const sameModelRetry = (e) => e instanceof ProviderError && e.kind === "http" && (e.status === 429 || e.status >= 500);
 const nextModelAllowed = (e) => e instanceof ProviderError && e.kind !== "config" && (e.kind !== "http" || e.status === 404 || e.status === 429 || e.status >= 500);
 
+const NO_DATA = "нет данных";
+/* Строка llm_usage: только счётчики и причина остановки. Нет данных от провайдера (usage или finish не присланы): «нет данных», бот при этом работает.
+   В хук __onUsage (eval_cases.js) уходит исходная запись с null. */
 function logUsage(env, model, r, ms) {
   const u = r.usage || {};
-  const entry = { provider: providerName(env), model, prompt_tokens: u.prompt_tokens == null ? null : u.prompt_tokens, completion_tokens: u.completion_tokens == null ? null : u.completion_tokens, ms };
-  console.log("llm_usage " + JSON.stringify(entry));
+  const nd = (v) => (v === null || v === undefined || v === "" ? NO_DATA : v);
+  const entry = { provider: providerName(env), model, prompt_tokens: u.prompt_tokens === undefined ? null : u.prompt_tokens, completion_tokens: u.completion_tokens === undefined ? null : u.completion_tokens, finish: r.finishReason || null, ms };
+  console.log("llm_usage " + JSON.stringify({ provider: entry.provider, model, prompt_tokens: nd(entry.prompt_tokens), completion_tokens: nd(entry.completion_tokens), finish: nd(entry.finish), ms }));
   if (typeof env.__onUsage === "function") env.__onUsage(entry);
 }
 

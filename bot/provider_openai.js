@@ -53,43 +53,66 @@ function toTools(tools) {
   return (tools || []).map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters || { type: "object", properties: {} } } }));
 }
 
+/* arguments вызова инструмента: строка JSON, пустая строка или null (как {}), уже готовый объект. Невалидный JSON или не объект — сбой bad_args:
+   адаптер не угадывает аргументы, ядро получает ProviderError и llm.js переходит к запасной модели (бот не падает). */
 function parseArgs(raw) {
-  if (raw && typeof raw === "object") return raw;
-  try { const v = JSON.parse(String(raw || "{}")); return v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch (_) { return {}; }
+  if (raw === undefined || raw === null) return {};
+  if (typeof raw === "object") {
+    if (Array.isArray(raw)) throw new ProviderError("bad_args");
+    return raw;
+  }
+  const s = String(raw).trim();
+  if (!s) return {};
+  let v;
+  try { v = JSON.parse(s); } catch (_) { throw new ProviderError("bad_args"); }
+  if (v === null) return {};
+  if (typeof v !== "object" || Array.isArray(v)) throw new ProviderError("bad_args");
+  return v;
 }
 
-/* текст ответа: строка или массив частей; встроенные рассуждения <think>…</think> в клиентский текст не попадают */
+/* Текст ответа: строка или массив частей. Рассуждения модели в клиентский текст не попадают: блоки <think>…</think> (и <thinking>) вырезаются,
+   в том числе оборванный блок без закрывающего тега (ответ обрезан по длине) и «хвост рассуждений» перед одиноким </think>.
+   Поля reasoning_content и reasoning сообщения не читаются вообще: ни в историю, ни в лог они не попадают. */
 function messageText(content) {
   let t = "";
   if (typeof content === "string") t = content;
   else if (Array.isArray(content)) t = content.map((p) => (typeof p === "string" ? p : p && typeof p.text === "string" ? p.text : "")).join("");
-  return t.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  t = t.replace(/<(think|thinking)>[\s\S]*?<\/\1>/gi, "");
+  t = t.replace(/<(think|thinking)>[\s\S]*$/i, "");
+  const close = /<\/(think|thinking)>/gi;
+  let last = null, m;
+  while ((m = close.exec(t))) last = m;
+  if (last) t = t.slice(last.index + last[0].length);
+  return t.trim();
 }
 
 const FINISH = { stop: "STOP", tool_calls: "STOP", length: "MAX_TOKENS", content_filter: "SAFETY" };
+const count = (v) => (v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
 
-/* ответ провайдера -> {content, text, calls, finishReason, usage} */
+/* ответ провайдера -> {content, text, calls, finishReason, usage}.
+   Вызов инструмента определяется по наличию tool_calls, а не по finish_reason (провайдеры ставят там stop, tool_calls или что угодно).
+   Пустой текст без вызовов: при finish_reason=length это сбой length (ответ съело рассуждение или лимит MAX_OUTPUT_TOKENS), иначе empty. */
 function fromResponse(data) {
   const ch = data && Array.isArray(data.choices) ? data.choices[0] : null;
   const msg = ch && ch.message;
-  if (!msg) throw new ProviderError("empty", 0);
+  if (!msg || typeof msg !== "object") throw new ProviderError("empty", 0);
   let seq = 0;
   const calls = (Array.isArray(msg.tool_calls) ? msg.tool_calls : [])
     .filter((c) => c && c.function && c.function.name)
     .map((c) => ({ name: c.function.name, args: parseArgs(c.function.arguments), id: c.id || "call_" + ++seq }));
   const text = messageText(msg.content);
-  if (!calls.length && !text) throw new ProviderError("empty", 0);
+  const fin = String(ch.finish_reason || "");
+  if (!calls.length && !text) throw new ProviderError(fin === "length" ? "length" : "empty", 0);
   const parts = [];
   if (text) parts.push({ text });
   calls.forEach((c) => parts.push({ functionCall: { name: c.name, args: c.args, id: c.id } }));
-  const u = (data && data.usage) || {};
-  const fin = String(ch.finish_reason || "");
+  const u = data && data.usage && typeof data.usage === "object" ? data.usage : {};
   return {
     content: { role: "model", parts },
     text: calls.length ? "" : text,
     calls,
     finishReason: FINISH[fin] || fin.toUpperCase(),
-    usage: { prompt_tokens: Number.isFinite(u.prompt_tokens) ? u.prompt_tokens : null, completion_tokens: Number.isFinite(u.completion_tokens) ? u.completion_tokens : null },
+    usage: { prompt_tokens: count(u.prompt_tokens), completion_tokens: count(u.completion_tokens) },
   };
 }
 
