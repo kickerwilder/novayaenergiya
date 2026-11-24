@@ -21,6 +21,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+import product_types as PT  # noqa: E402
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 spec = importlib.util.spec_from_file_location("consent_check", ROOT / "tests" / "consent_check.py")
 cc = importlib.util.module_from_spec(spec); spec.loader.exec_module(cc)
@@ -99,6 +101,13 @@ def main():
                 except Exception: pass
                 f = fab(pg)
                 check(f and f["text"] == "Подобрать станцию в чате" and f["vis"] and f["n"] == 1 and f["has"], "%s: кнопка чата не появилась или неверна: %s" % (pid, f))
+                pg.close()
+            for rel in PT.all_pages_rel():          # страницы новых типов товаров (пока типов нет, цикл пустой)
+                pg = ctx.new_page(); pg.goto(SITE + rel, wait_until="load")
+                try: pg.wait_for_function("document.getElementById('chatFab')", timeout=5000)
+                except Exception: pass
+                f = fab(pg)
+                check(f and f["text"] == "Подобрать станцию в чате" and f["vis"] and f["n"] == 1 and f["has"], "%s: кнопка чата не появилась или неверна: %s" % (rel, f))
                 pg.close()
             ctx.close()
 

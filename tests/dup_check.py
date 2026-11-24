@@ -66,9 +66,18 @@ def main():
     ap.add_argument("--max-pair", type=float, default=55.0)
     ap.add_argument("--dir", default=str(ROOT / "models"))
     ap.add_argument("--content-only", action="store_true", help="не считать шапку, подвал и нижнюю панель (каркас сайта)")
+    ap.add_argument("--all-types", action="store_true", help="отдельный отчёт по каждому типу товаров, у которого не меньше 3 страниц (страницы станций считаются всегда)")
     a = ap.parse_args()
     global CONTENT_ONLY
     CONTENT_ONLY = a.content_only
+    if a.all_types:   # те же метрики для папок типов товаров (если они есть и страниц не меньше трёх)
+        for d in sorted(p for p in ROOT.iterdir() if p.is_dir() and p.name not in ("models", ".git", "node_modules", "assets", "data", "bot", "scripts", "tests", "fonts", "img", ".github", ".claude")):
+            files = [f for f in d.glob("*.html") if f.name != "index.html"]
+            if len(files) >= 3:
+                print("=== тип: %s ===" % d.name)
+                sys.argv = [sys.argv[0], "--dir", str(d)] + (["--content-only"] if a.content_only else []) + (["--blocks"] if a.blocks else [])
+                main()
+        print("=== станции (models) ===")
 
     pages = sorted(glob.glob(str(Path(a.dir) / "*.html")))
     texts = {p: Path(p).read_text(encoding="utf-8") for p in pages}
