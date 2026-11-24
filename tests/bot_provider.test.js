@@ -672,6 +672,35 @@ async function captureLogs(fn) {
     } finally { await srv.close(); fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
+  await test("кейс dlg_clarify_then_pick (ход 1): проходит при вопросе «?» или просьбе уточнить (расскажите, подскажите, уточните, напишите, назовите), падает без обоих", async () => {
+    const fs = require("fs"), os = require("os");
+    const all = JSON.parse(fs.readFileSync(path.join(__dirname, "bot_cases.json"), "utf8"));
+    const turn = all.find((c) => c.id === "dlg_clarify_then_pick").turns[0];
+    const hasCheck = turn.checks.find((c) => c.t === "has");
+    assert.deepStrictEqual(hasCheck.re, ["\\?", "расскажите", "подскажите", "уточните", "напишите", "назовите"], "проверка в кейсе");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ne_clarify_"));
+    const casesFile = path.join(dir, "cases.json");
+    fs.writeFileSync(casesFile, JSON.stringify([{ id: "turn1", name: "n", target: "main", numbers: false, messages: [{ role: "user", text: turn.say }], checks: turn.checks }]));
+    const run = async (reply) => {
+      const srv = await fakeServer(() => okText(reply));
+      try {
+        const r = await runNode([path.join(BOT, "tools", "eval_cases.js"), "--cases", casesFile, "--delay-ms", "10", "--retries", "0", "--no-fallback", "--no-env-file"], {
+          env: { PATH: process.env.PATH, SKIP_DOTENV: "1", PROVIDER: "openai", PROVIDER_BASE_URL: srv.url + "/v1", PROVIDER_API_KEY: KEY, MODEL: "m-eval" }, cwd: BOT,
+        });
+        return { status: /turn1\s+PASS/.test(r.stdout) ? "PASS" : /turn1\s+FAIL/.test(r.stdout) ? "FAIL" : "?", out: r.stdout };
+      } finally { await srv.close(); }
+    };
+    try {
+      for (const ok of ["Какие приборы вы хотите подключить?", "Чтобы подобрать станцию, расскажите, какие приборы нужно подключить и сколько часов автономии вам нужно.", "Подскажите, пожалуйста, что нужно питать.", "Уточните приборы и время автономии.", "Напишите, что будет работать от станции.", "Назовите приборы, которые нужно подключить."])
+        assert.strictEqual((await run(ok)).status, "PASS", "должен проходить: " + ok);
+      for (const bad of ["Хорошо, подберём станцию для дачи.", "Для дачи подойдёт станция ZF08-2001.5, 800 Вт.", "Станции работают от аккумулятора LiFePO4."]) {
+        const r = await run(bad);
+        assert.strictEqual(r.status, "FAIL", "должен падать: " + bad + "\n" + r.out);
+        assert.ok(/в ответе нет ни одного из/.test(r.out), "причина падения: нет ни одного из слов");
+      }
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
   out("\nитого: ok " + passed + ", ошибок " + failed);
   process.exit(failed ? 1 : 0);
 })();
