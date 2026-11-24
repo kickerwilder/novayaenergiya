@@ -189,6 +189,15 @@ test("Z4000-4600-D: розетка 16 А «до 4000 Вт» помечена unc
   assert.strictEqual(s0.specs.sockets_ac.ac_16a.max_w, 4000);
   assert.ok(s0.unconfirmed.some((x) => x.field === "socket16"));
 });
+test("шесть светлых версий: XT90 «30 А и 900/1000 Вт при 24 В» помечено unconfirmed (dc_connectors), числа остаются только в specs", () => {
+  for (const code of ["Z2800-6200-L", "Z4000-6200-L", "Z4000-8600-L", "Z4000-10000-L", "Z5000-8600-L", "Z5000-10000-L"]) {
+    const s0 = get(code).stations[0];
+    const u = s0.unconfirmed.find((x) => x.field === "dc_connectors");
+    assert.ok(u && /не согласуется/.test(u.note) && /уточняется у завода/.test(u.note), code + ": нет пометки dc_connectors");
+    assert.ok(/XT90/.test(s0.specs.dc_connectors), code);
+  }
+  assert.ok(!get("Z1600-5000-L").stations[0].unconfirmed.some((x) => x.field === "dc_connectors"), "лишняя пометка у Z1600-5000-L");
+});
 test("list_stations отдаёт specs и unconfirmed в строках", () => {
   list({ limit: 10 }).stations.forEach((row) => {
     assert.ok(row.specs && row.specs.weight_kg > 0, row.code);
