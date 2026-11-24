@@ -11,7 +11,7 @@ const SETTINGS = {
 
 /* Адрес бэкенда чата-консультанта (например "https://bot.example.ru"). Пусто: чат не показывается, сайт работает без бэкенда.
    Для локальной проверки без правки файла: открыть страницу с ?chat=local (порт 8787) или ?chat=local:ПОРТ. */
-const CHAT_URL = "";
+const CHAT_URL = "https://bot.novaya-energy.ru";
 
 (function(){
 "use strict";
