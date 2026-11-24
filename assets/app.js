@@ -9,9 +9,7 @@ const SETTINGS = {
   contactHref: "tel:+79787280002" // основной контакт; например "https://t.me/ваш_ник"; пусто = кнопка скрыта
 };
 
-/* Адрес бэкенда чата-консультанта (например "https://bot.example.ru"). Пусто: чат не показывается, сайт работает без бэкенда.
-   Для локальной проверки без правки файла: открыть страницу с ?chat=local (порт 8787) или ?chat=local:ПОРТ. */
-const CHAT_URL = "https://bot.novaya-energy.ru";
+/* Адрес бота и запуск чата-консультанта (кнопка, ленивая загрузка assets/chat.js) вынесены в assets/chat-launcher.js: тот же чат работает и на страницах моделей. */
 
 (function(){
 "use strict";
@@ -465,32 +463,8 @@ document.getElementById("gl").innerHTML=D.glossary.map(function(g){return '<dt>'
   },{threshold:0.15}).observe(v);
 })();
 
-/* чат-консультант: кнопка создаётся сразу, сам виджет (assets/chat.js) подгружается лениво: на простое страницы или по нажатию */
-(function(){
-  var url=CHAT_URL, m=/[?&]chat=local(?::(\d+))?(?:&|$)/.exec(location.search);
-  if(m) url="http://localhost:"+(m[1]||"8787");
-  if(!url) return;
-  document.body.classList.add("has-chat");
-  var btn=document.createElement("button");
-  btn.type="button"; btn.className="chat-fab"; btn.id="chatFab"; btn.setAttribute("aria-haspopup","dialog"); btn.setAttribute("aria-expanded","false"); btn.setAttribute("aria-controls","chatPanel");
-  var logo=(document.querySelector('link[rel="icon"][type="image/svg+xml"]')||{}).href||"";
-  var icon=logo?'<img class="chat-fab-ic" src="'+logo+'" width="28" height="28" alt="">':'<svg class="chat-fab-ic" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="currentColor"/></svg>';
-  btn.innerHTML=icon+'<span>Подобрать станцию в чате</span>';
-  document.body.appendChild(btn);
-  var waiting=null;
-  function load(cb){
-    if(window.NEchat){cb(); return;}
-    if(waiting){waiting.push(cb); return;}
-    waiting=[cb];
-    var sc=document.createElement("script"); sc.src="assets/chat.js";
-    sc.onload=function(){ window.NEchat.init({url:url,button:btn,goToCode:goToCode,fmtPrice:fmtPrice,logo:logo}); var q=waiting; waiting=null; q.forEach(function(f){f()}); };
-    sc.onerror=function(){ waiting=null; btn.hidden=true; };
-    document.head.appendChild(sc);
-  }
-  btn.addEventListener("click",function(){ window.neGoal("chat_open"); load(function(){window.NEchat.toggle()}); });
-  if("requestIdleCallback" in window) requestIdleCallback(function(){load(function(){})},{timeout:8000});
-  else setTimeout(function(){load(function(){})},5000);
-})();
+/* чат-консультант: запуск в assets/chat-launcher.js (подключён перед этим файлом); главная передаёт свои goToCode и fmtPrice */
+if(window.NEchatLaunch) window.NEchatLaunch({goToCode:goToCode,fmtPrice:fmtPrice});
 
 /* цели веб-аналитики: без счётчика (scripts/seo.json, ym_counter_id) window.neGoal ничего не делает */
 window.neGoal = window.neGoal || function () {};
