@@ -85,6 +85,7 @@
   <a class="btn" href="mailto:apv0050@gmail.com">Написать</a>
 </div>
 <button type="button" class="to-top" id="toTop" aria-label="Наверх" title="Наверх">↑</button>
+<script>window.addEventListener("load",function(){var s=document.createElement("script");s.src="../assets/chat-launcher.js";s.setAttribute("data-auto","");document.head.appendChild(s)})</script>
 
 <script>
 (function(){
@@ -102,6 +103,13 @@
       });
     });
   });
+
+  // Версия корпуса из адреса (#v=D или #v=L): так открывает страницу кнопка «К карточке» в ответе чата
+  var hv = /[#&]v=([DL])(?:&|$)/.exec(location.hash);
+  if(hv){
+    var hb = document.querySelector('.model-btn[data-target="' + hv[1] + '"]');
+    if(hb && !hb.classList.contains("active")) hb.click();
+  }
 
   // Кнопка Наверх
   var topBtn = document.getElementById("toTop");
