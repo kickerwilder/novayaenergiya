@@ -54,6 +54,59 @@ def load_data():
     return data, prices, charge
 
 
+def load_specs():
+    """Характеристики версий из data/source/station_specs.json (по каталогу завода); ключ: код версии (Z...-D|L)."""
+    return json.loads(read(ROOT / "data" / "source" / "station_specs.json"))["stations"]
+
+
+SPECS = load_specs()
+# какие поля specs считаются спорными, если у версии есть запись unconfirmed с этим именем (спорное в новые тексты не попадает)
+FLAG_FIELDS = {
+    "weight": ("weight_kg", "weight_packed_kg"),
+    "size": ("size_cm", "package_cm"),
+    "socket16": ("ac_16a_limit",),
+    "socket_vs_power": ("ac_10a_limit",),
+    "usb": ("usb",),
+    "dc_connectors": ("dc_connectors",),
+    "dc_voltage": ("dc_voltage_v",),
+}
+
+
+def spec_ok(code, field):
+    """Поле версии подтверждено каталогом: нет записи unconfirmed, которая его затрагивает."""
+    sp = SPECS.get(code)
+    if not sp or sp.get(field.split("_limit")[0] if False else field, True) is None:
+        return False
+    flagged = {u["field"] for u in sp.get("unconfirmed", [])}
+    return not any(field in FLAG_FIELDS.get(f, ()) for f in flagged)
+
+
+def fnum(x):
+    """Число для текста: 25.5 -> «25,5», 31.0 -> «31»."""
+    if isinstance(x, float) and x == int(x):
+        x = int(x)
+    return str(x).replace(".", ",")
+
+
+def dims_text(d):
+    return f"{fnum(d['l'])} × {fnum(d['w'])} × {fnum(d['h'])} см"
+
+
+def sockets_text(code):
+    """Розетки 220 В версии: число и тип; предел мощности только если он подтверждён."""
+    sp = SPECS.get(code)
+    if not sp:
+        return ""
+    parts = []
+    for key, amp in (("ac_10a", 10), ("ac_16a", 16)):
+        v = (sp.get("sockets_ac") or {}).get(key)
+        if not v:
+            continue
+        lim = f" (до {num(v['max_w'])} Вт)" if spec_ok(code, key + "_limit") else ""
+        parts.append(f"{v['count']} × {amp} А{lim}")
+    return "; ".join(parts)
+
+
 def format_range_val(v):
     s = ("%.1f" % v).replace(".", ",")
     return s[:-2] if s.endswith(",0") else s
@@ -143,6 +196,192 @@ def eval_appliance(app, cap, power, eff=0.85):
             time_str = f"до {days} суток *"
 
     return {"status": "ok", "badge": badge, "time": time_str}
+
+
+# Группы приборов для текста «что и сколько часов» (индексы в APPLIANCES)
+RT_GROUPS = [
+    ("Постоянные нагрузки", [0, 1, 2, 3, 4, 5, 6, 7]),
+    ("Насос и кондиционер", [8, 9]),
+    ("Инструмент и кухонная техника", [10, 11, 12]),
+    ("Нагреватели", [13, 14, 15]),
+]
+
+
+def runtime_html(cap, power):
+    """Время работы приборов предложениями: те же формулы и пороги, что в таблице (eval_appliance), числа этой модели."""
+    paras = []
+    refuse = []
+    for head, idxs in RT_GROUPS:
+        items = []
+        for i in idxs:
+            app = APPLIANCES[i]
+            res = eval_appliance(app, cap, power)
+            name = app["name"] if app["name"].startswith("Wi-Fi") else app["name"][0].lower() + app["name"][1:]
+            if res["status"] == "no":
+                refuse.append(f"{name} ({num(app['watts'])} Вт) — {res['time'][0].lower() + res['time'][1:]}")
+                continue
+            peak = ", пуск на пике до 0,3 с" if "warn" in res["badge"] else ""
+            items.append(f"{name} ({num(app['watts'])} Вт{peak}) — {res['time']}")
+        if items:
+            paras.append(f"<p><strong>{head}:</strong> " + "; ".join(items) + ".</p>")
+    if refuse:
+        paras.append("<p><strong>Не по силам этой станции:</strong> " + "; ".join(refuse) + ".</p>")
+    return (
+        f'<section class="model-sec">'
+        f'<h2>Что и сколько часов будет работать от этой станции</h2>'
+        f'<p class="lead">Ёмкость {num(cap)} Вт·ч с учётом КПД инвертора 85 % и номинальная мощность {num(power)} Вт:</p>'
+        + "".join(paras) +
+        f'<p class="fn">* Время расчётное. При включённом инверторе станция потребляет до 50 Вт (по паспорту изделия): у приборов до 100 Вт фактическое время работы может быть меньше. Мелкие гаджеты рекомендуется заряжать через штатные USB-порты.</p>'
+        f'</section>'
+    )
+
+
+def diff_html(combo, data, prices):
+    """«Чем отличается корпус»: только подтверждённые различия версий D и L этой модели (если различий нет, блока нет)."""
+    if len(combo["vers"]) != 2:
+        return ""
+    cD, cL = combo["vers"]["D"]["code"], combo["vers"]["L"]["code"]
+    sD, sL = SPECS.get(cD), SPECS.get(cL)
+    if not sD or not sL:
+        return ""
+    nD, nL = data["versions"]["D"]["name"], data["versions"]["L"]["name"]
+    nD, nL = nD[0].lower() + nD[1:], nL[0].lower() + nL[1:]
+    items = []
+
+    def both(title, vD, vL):
+        items.append(f"<li><b>{title}.</b> {nD[0].upper() + nD[1:]} — {vD}. {nL[0].upper() + nL[1:]} — {vL}.</li>")
+    if spec_ok(cD, "size_cm") and spec_ok(cL, "size_cm") and sD["size_cm"] != sL["size_cm"]:
+        both("Размеры (Д × Ш × В)", dims_text(sD["size_cm"]), dims_text(sL["size_cm"]))
+    if spec_ok(cD, "package_cm") and spec_ok(cL, "package_cm") and sD["package_cm"] != sL["package_cm"]:
+        both("Размер упаковки", dims_text(sD["package_cm"]), dims_text(sL["package_cm"]))
+    if spec_ok(cD, "weight_kg") and spec_ok(cL, "weight_kg") and sD["weight_kg"] != sL["weight_kg"]:
+        both("Вес без упаковки", f"{fnum(sD['weight_kg'])} кг", f"{fnum(sL['weight_kg'])} кг")
+    if spec_ok(cD, "weight_packed_kg") and spec_ok(cL, "weight_packed_kg") and sD["weight_packed_kg"] != sL["weight_packed_kg"]:
+        both("Вес в упаковке", f"{fnum(sD['weight_packed_kg'])} кг", f"{fnum(sL['weight_packed_kg'])} кг")
+    tD, tL = sockets_text(cD), sockets_text(cL)
+    if tD and tL and tD != tL:
+        both("Розетки 220 В", tD, tL)
+    if spec_ok(cD, "usb") and spec_ok(cL, "usb") and sD["usb"] != sL["usb"]:
+        both("Порты USB", sD["usb"], sL["usb"])
+    if spec_ok(cD, "dc_connectors") and spec_ok(cL, "dc_connectors") and sD["dc_connectors"] != sL["dc_connectors"]:
+        both("Выход постоянного тока", sD["dc_connectors"], sL["dc_connectors"])
+    pD, pL = prices.get(cD, 0), prices.get(cL, 0)
+    if pD and pL and pD != pL:
+        more, less, diff = (nL, nD, pL - pD) if pL > pD else (nD, nL, pD - pL)
+        items.append(f"<li><b>Цена.</b> {more[0].upper() + more[1:]} дороже, чем {less}, на {num(diff)} ₽ ({num(max(pD, pL))} ₽ и {num(min(pD, pL))} ₽ с доставкой).</li>")
+    if not items:
+        return ""
+    return (
+        f'<section class="model-sec">'
+        f'<h2>Чем отличаются два корпуса этой модели</h2>'
+        f'<p class="lead">Мощность {num(combo["power"])} Вт и ёмкость {num(combo["cap"])} Вт·ч у обоих корпусов одинаковые, различаются:</p>'
+        f'<ul class="diff-list">{"".join(items)}</ul>'
+        f'</section>'
+    )
+
+
+def charge_html(combo, data, prices, charge):
+    """Зарядка от сети (ориентировочное время из charge.js, как на сайте) и стоимость 1 Вт·ч (цена с доставкой ÷ ёмкость, prices.js)."""
+    cap = combo["cap"]
+    keys = [k for k in ("D", "L") if k in combo["vers"]]
+    texts = {k: charge_text_for(cap, charge.get(combo["vers"][k]["code"])) for k in keys}
+    known = {k: t for k, t in texts.items() if "уточняется" not in t}
+    paras = []
+    if known:
+        if len(set(known.values())) == 1 and len(known) == len(keys):
+            paras.append(f"<p>{next(iter(known.values()))}.</p>")
+        else:
+            for k, t in known.items():
+                paras.append(f"<p><strong>{esc(data['versions'][k]['name'])}.</strong> {t}.</p>")
+    per_wh = []
+    for k in keys:
+        pr = prices.get(combo["vers"][k]["code"], 0)
+        if pr:
+            body = data["versions"][k]["name"]
+            per_wh.append(f"<li><b>{esc(body)}:</b> {num(pr)} ₽ за {num(cap)} Вт·ч, то есть ≈ {fnum(round(pr / cap, 1))} ₽ за 1 Вт·ч ёмкости (цена с доставкой ÷ ёмкость).</li>")
+    if not paras and not per_wh:
+        return ""
+    return (
+        f'<section class="model-sec">'
+        f'<h2>Зарядка и стоимость 1 Вт·ч</h2>'
+        + "".join(paras)
+        + (f'<ul class="diff-list">{"".join(per_wh)}</ul>' if per_wh else "")
+        + f'</section>'
+    )
+
+
+def faq_model_html(combo, data, prices, all_combos):
+    """Короткий FAQ модели: вес и габариты, розетки, постоянный ток, время работы сразу нескольких приборов. Только подтверждённые поля."""
+    cap, power = combo["cap"], combo["power"]
+    keys = [k for k in ("D", "L") if k in combo["vers"]]
+    codes = {k: combo["vers"][k]["code"] for k in keys}
+    body = lambda k: data["versions"][k]["name"]
+    qa = []
+
+    def per_version(fn, label_each=True):
+        parts = []
+        for k in keys:
+            t = fn(codes[k])
+            if t:
+                nb = body(k)
+                parts.append((f"{nb[0].upper() + nb[1:]} — " if len(keys) > 1 else "") + t)
+        return parts if len(parts) == len(keys) else []
+
+    def size_ans(code):
+        sp = SPECS.get(code); out = []
+        if spec_ok(code, "weight_kg"): out.append(f"вес {fnum(sp['weight_kg'])} кг")
+        if spec_ok(code, "weight_packed_kg"): out.append(f"{fnum(sp['weight_packed_kg'])} кг в упаковке")
+        if spec_ok(code, "size_cm"): out.append(f"размеры {dims_text(sp['size_cm'])} (Д × Ш × В)")
+        if spec_ok(code, "package_cm"): out.append(f"упаковка {dims_text(sp['package_cm'])}")
+        return ", ".join(out)
+    a = per_version(size_ans)
+    if a:
+        qa.append((f"Сколько весит станция {nm.power_cap(power, cap)} и какие у неё габариты?", ". ".join(a) + "."))
+    a = per_version(sockets_text)
+    if a:
+        qa.append((f"Сколько розеток 220 В у станции на {num(power)} Вт?", ". ".join(a) + "."))
+
+    def dc_ans(code):
+        sp = SPECS.get(code)
+        if spec_ok(code, "dc_voltage_v") and spec_ok(code, "dc_connectors"):
+            return f"выход постоянного тока {sp['dc_voltage_v']} В: {sp['dc_connectors']}"
+        return ""
+    a = per_version(dc_ans)
+    if a:
+        qa.append((f"Какое напряжение и какие разъёмы постоянного тока у ёмкости {num(cap)} Вт·ч?", ". ".join(a) + "."))
+    # время работы нескольких приборов сразу: средняя мощность (avg) из того же списка приборов, формула та же (ёмкость × 0,85 ÷ средняя мощность)
+    trio = [APPLIANCES[0], APPLIANCES[2], APPLIANCES[3]]
+    avg = sum(x["avg"] for x in trio)
+    if power >= sum(x["watts"] for x in trio):
+        res = eval_appliance({"name": "", "watts": avg, "avg": avg, "start": 0, "type": "time"}, cap, power)
+        qa.append((f"На сколько хватит ёмкости {num(cap)} Вт·ч для газового котла, холодильника и роутера одновременно?",
+                   f"В среднем они потребляют {num(avg)} Вт (котёл {trio[0]['avg']} Вт, холодильник {trio[1]['avg']} Вт, роутер {trio[2]['avg']} Вт). Расчётное время работы: {res['time']} (ёмкость × 0,85 ÷ средняя мощность)."))
+    # модели каталога с той же ёмкостью и с той же мощностью (из data/catalog.js и data/prices.js; ссылки на их страницы)
+    def lowest(c):
+        pr = [prices.get(v["code"], 0) for v in c["vers"].values() if prices.get(v["code"], 0) > 0]
+        return min(pr) if pr else 0
+
+    def link(c):
+        return f'<a href="z{c["power"]}-{c["cap"]}.html">{esc(c["title"])}</a>' + (f" — от {num(lowest(c))} ₽" if lowest(c) else "")
+    same_cap = [c for c in all_combos if c["cap"] == cap and c["id"] != combo["id"]]
+    same_pow = [c for c in all_combos if c["power"] == power]
+    html_qa = [(esc(q), esc(a_[0].upper() + a_[1:])) for q, a_ in qa]
+    if same_cap:
+        html_qa.append((esc(f"Какие ещё станции в каталоге имеют ёмкость {num(cap)} Вт·ч?"),
+                        "Такая же ёмкость у моделей: " + "; ".join(link(c) for c in same_cap) + f". У этой модели мощность {num(power)} Вт."))
+    if len(same_pow) > 1:
+        html_qa.append((esc(f"Какие варианты ёмкости есть у станций на {num(power)} Вт?"),
+                        "Станции на " + num(power) + " Вт выпускаются с ёмкостью " + "; ".join(
+                            (f"{dec(c['cap'] / 1000)} кВт·ч" + (f" — от {num(lowest(c))} ₽" if lowest(c) else "")) if c["id"] != combo["id"]
+                            else f"{dec(c['cap'] / 1000)} кВт·ч (эта модель" + (f", от {num(lowest(c))} ₽" if lowest(c) else "") + ")" for c in same_pow) + "."))
+    if not html_qa:
+        return ""
+    return (
+        f'<section class="model-sec faq">'
+        f'<h2>Частые вопросы об этой модели</h2>'
+        + "".join(f"<details><summary>{q}</summary><p>{a_}</p></details>" for q, a_ in html_qa)
+        + f'</section>'
+    )
 
 
 def build_page(combo, data, prices, charge, all_combos):
@@ -304,7 +543,6 @@ def build_page(combo, data, prices, charge, all_combos):
             f'  <section class="model-sec">'
             f'    <h2>Характеристики и параметры зарядки ({esc(data["versions"][k]["name"])})</h2>'
             f'    <table class="rt-table specs-table"><tbody>{specs_rows}</tbody></table>'
-            f'    <p class="fn">{ch_text}</p>'
             f'  </section>'
             f'  <section class="model-sec">'
             f'    <h2>Схема портов и разъёмов</h2>'
@@ -317,31 +555,11 @@ def build_page(combo, data, prices, charge, all_combos):
         )
         panes_html.append(pane)
 
-    # Инженерная таблица расчёта времени работы приборов
-    rt_rows = []
-    for app in APPLIANCES:
-        res = eval_appliance(app, cap, power)
-        app_watts = f" ({app['watts']} Вт)" if app["watts"] else ""
-        rt_rows.append(
-            f'<tr>'
-            f'  <td><strong>{esc(app["name"])}</strong>{app_watts}</td>'
-            f'  <td>{res["badge"]}</td>'
-            f'  <td>{res["time"]}</td>'
-            f'</tr>'
-        )
-    rt_table_html = (
-        f'<section class="model-sec">'
-        f'  <h2>Что и сколько часов будет работать от этой станции</h2>'
-        f'  <p class="lead">Расчёт автономной работы приборов от ёмкости {num(cap)} Вт·ч с учётом КПД инвертора 85 % и номинальной мощности {num(power)} Вт:</p>'
-        f'  <div class="table-wrap">'
-        f'    <table class="rt-table">'
-        f'      <thead><tr><th>Прибор / нагрузка</th><th>Статус запуска</th><th>Время автономной работы</th></tr></thead>'
-        f'      <tbody>{"".join(rt_rows)}</tbody>'
-        f'    </table>'
-        f'  </div>'
-        f'  <p class="fn">* Время расчётное. При включённом инверторе станция потребляет до 50 Вт (по паспорту изделия): у приборов до 100 Вт фактическое время работы может быть меньше. Мелкие гаджеты рекомендуется заряжать через штатные USB-порты.</p>'
-        f'</section>'
-    )
+    # Время работы приборов предложениями, отличия корпусов, зарядка и стоимость 1 Вт·ч, короткий FAQ (всё из данных)
+    rt_table_html = runtime_html(cap, power)
+    diff_block = diff_html(combo, data, prices)
+    charge_block = charge_html(combo, data, prices, charge)
+    faq_block = faq_model_html(combo, data, prices, all_combos)
 
     # Блок перелинковки (соседние модели)
     cur_idx = next(i for i, c in enumerate(all_combos) if c["id"] == cid)
@@ -450,7 +668,13 @@ def build_page(combo, data, prices, charge, all_combos):
 
   {"".join(panes_html)}
 
+  {diff_block}
+
+  {charge_block}
+
   {rt_table_html}
+
+  {faq_block}
 
   {related_html}
 
