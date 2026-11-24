@@ -281,10 +281,14 @@ def diff_html(combo, data, prices):
 
 
 def charge_html(combo, data, prices, charge):
-    """Зарядка от сети (ориентировочное время из charge.js, как на сайте) и стоимость 1 Вт·ч (цена с доставкой ÷ ёмкость, prices.js)."""
+    """Стоимость 1 Вт·ч (цена с доставкой ÷ ёмкость, prices.js) и, только для версий с basis passport или estimate в charge.js, время зарядки (estimate с пометкой «ориентировочно»).
+    Диапазоны basis "range" сюда не попадают: они остаются в прежних местах страницы."""
     cap = combo["cap"]
     keys = [k for k in ("D", "L") if k in combo["vers"]]
-    texts = {k: charge_text_for(cap, charge.get(combo["vers"][k]["code"])) for k in keys}
+    # время зарядки в новом блоке только там, где оно подтверждено паспортом или расчётом (basis passport и estimate);
+    # диапазоны basis "range" остаются только в уже существующих местах страницы
+    texts = {k: charge_text_for(cap, charge.get(combo["vers"][k]["code"]))
+             for k in keys if (charge.get(combo["vers"][k]["code"]) or {}).get("basis") in ("passport", "estimate")}
     known = {k: t for k, t in texts.items() if "уточняется" not in t}
     paras = []
     if known:
@@ -303,7 +307,7 @@ def charge_html(combo, data, prices, charge):
         return ""
     return (
         f'<section class="model-sec">'
-        f'<h2>Зарядка и стоимость 1 Вт·ч</h2>'
+        f'<h2>{"Зарядка и стоимость 1 Вт·ч" if paras else "Стоимость 1 Вт·ч"}</h2>'
         + "".join(paras)
         + (f'<ul class="diff-list">{"".join(per_wh)}</ul>' if per_wh else "")
         + f'</section>'
@@ -327,16 +331,24 @@ def faq_model_html(combo, data, prices, all_combos):
                 parts.append((f"{nb[0].upper() + nb[1:]} — " if len(keys) > 1 else "") + t)
         return parts if len(parts) == len(keys) else []
 
+    # вес и габариты входят в ответ только если подтверждены у всех версий модели, а вопрос называется по тому, что реально в ответе
+    def has_weight(code): return spec_ok(code, "weight_kg") or spec_ok(code, "weight_packed_kg")
+    def has_dims(code): return spec_ok(code, "size_cm") or spec_ok(code, "package_cm")
+    with_weight = all(has_weight(codes[k]) for k in keys)
+    with_dims = all(has_dims(codes[k]) for k in keys)
+
     def size_ans(code):
         sp = SPECS.get(code); out = []
-        if spec_ok(code, "weight_kg"): out.append(f"вес {fnum(sp['weight_kg'])} кг")
-        if spec_ok(code, "weight_packed_kg"): out.append(f"{fnum(sp['weight_packed_kg'])} кг в упаковке")
-        if spec_ok(code, "size_cm"): out.append(f"размеры {dims_text(sp['size_cm'])} (Д × Ш × В)")
-        if spec_ok(code, "package_cm"): out.append(f"упаковка {dims_text(sp['package_cm'])}")
+        if with_weight and spec_ok(code, "weight_kg"): out.append(f"вес {fnum(sp['weight_kg'])} кг")
+        if with_weight and spec_ok(code, "weight_packed_kg"): out.append(f"{fnum(sp['weight_packed_kg'])} кг в упаковке")
+        if with_dims and spec_ok(code, "size_cm"): out.append(f"размеры {dims_text(sp['size_cm'])} (Д × Ш × В)")
+        if with_dims and spec_ok(code, "package_cm"): out.append(f"упаковка {dims_text(sp['package_cm'])}")
         return ", ".join(out)
-    a = per_version(size_ans)
+    sz_title = {(True, True): "Сколько весит станция {m} и какие у неё габариты?", (False, True): "Какие у станции {m} габариты?",
+                (True, False): "Сколько весит станция {m}?"}.get((with_weight, with_dims))
+    a = per_version(size_ans) if sz_title else []
     if a:
-        qa.append((f"Сколько весит станция {nm.power_cap(power, cap)} и какие у неё габариты?", ". ".join(a) + "."))
+        qa.append((sz_title.format(m=nm.power_cap(power, cap)), ". ".join(a) + "."))
     a = per_version(sockets_text)
     if a:
         qa.append((f"Сколько розеток 220 В у станции на {num(power)} Вт?", ". ".join(a) + "."))
