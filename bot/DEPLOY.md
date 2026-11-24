@@ -31,7 +31,7 @@ sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sud
    | Переменная | Что внести |
    | --- | --- |
    | `PROVIDER_API_KEY` | ключ Google AI Studio (лучше отдельный проект и отдельный ключ) |
-   | `PROXY_URL` | `socks5://ЛОГИН:ПАРОЛЬ@ХОСТ:ПОРТ` или `http://…`; только для LLM и Telegram; пусто = напрямую |
+   | `PROXY_URL` | `http://ЛОГИН:ПАРОЛЬ@ХОСТ:ПОРТ` или `socks5://…`; рабочий вариант проверен с HTTP-прокси (`http://ЛОГИН:ПАРОЛЬ@ХОСТ:ПОРТ`); SOCKS5 у некоторых провайдеров зависает, тогда используйте HTTP; спецсимволы в логине и пароле кодируются в процентной записи (`@` → `%40`, `:` → `%3A`, `/` → `%2F`, `#` → `%23`, `%` → `%25`, пробел → `%20`); только для LLM и Telegram; пусто = напрямую |
    | `TELEGRAM_BOT_TOKEN` | токен бота от @BotFather |
    | `TELEGRAM_MANAGER_CHAT_ID` | chat id менеджера (см. шаг 4) |
    | `MODEL`, `FALLBACK_MODEL` | по образцу; менять при смене моделей Gemini |
@@ -50,7 +50,8 @@ sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sud
    curl -sS -m 15 -x "$P" -o /dev/null -w "gemini:   %{http_code}\n" https://generativelanguage.googleapis.com/
    unset PROVIDER_API_KEY TELEGRAM_BOT_TOKEN PROXY_URL P
    ```
-   Если оба запроса возвращают код, прокси годится. Если нет: проверьте логин, пароль, порт, что прокси допускает HTTPS (CONNECT) и что выходной адрес прокси не заблокирован.
+   Если оба запроса возвращают код, прокси годится. Если нет: проверьте логин, пароль (спецсимволы кодируются), порт, что прокси допускает HTTPS (CONNECT) и что выходной адрес прокси не заблокирован; если `socks5://` зависает, переключитесь на `http://`.
+   То же делает `node proxy_check.js` (в папке `bot/`): он печатает только схему прокси (`http` или `socks5`) и итог по каждому адресу, без логина, пароля и хоста; `node proxy_check.js --gemini` добавляет 10 запросов «Ответь ОК» к Gemini API.
 4. **Chat id менеджера.** Менеджер открывает вашего бота в Telegram и пишет ему любое сообщение (например, `/start`). Затем (вебхук не используется, бот опрашивает `getUpdates` через `PROXY_URL`):
    ```bash
    docker compose run --rm bot node tg_chat_id.js
