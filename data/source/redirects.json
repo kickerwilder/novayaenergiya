@@ -1,0 +1,4 @@
+{
+ "_about": "Переезды и удаления адресов. Запись нужна, если адрес из urls_published.json больше не генерируется. 301: {\"from\": \"/models/старый.html\", \"to\": \"/models/новый.html\", \"code\": 301}; 410: {\"from\": \"/panels/x.html\", \"code\": 410}. По записям строятся bot/deploy/redirects.caddy и запасные страницы для GitHub Pages (301).",
+ "redirects": []
+}

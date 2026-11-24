@@ -1,0 +1,3 @@
+# Сгенерировано scripts/build_product_types.py из data/source/redirects.json: не редактировать вручную; не публикуется на сайте.
+# Подключение: в блок основного домена bot/deploy/Caddyfile добавить строку «import redirects.caddy» (файл лежит рядом с Caddyfile на сервере).
+# Пока в redirects.json нет записей, файл пустой.

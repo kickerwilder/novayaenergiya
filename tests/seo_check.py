@@ -18,6 +18,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+import product_types as PT  # noqa: E402
 SITE = "https://novaya-energy.ru/"
 errors = []
 
@@ -70,7 +72,8 @@ for p in pages[1:]:
 sm = (ROOT / "sitemap.xml").read_text(encoding="utf-8")
 locs = re.findall(r"<loc>(.*?)</loc>", sm)
 lastmods = re.findall(r"<lastmod>(.*?)</lastmod>", sm)
-if sorted(locs) != sorted(canon_of.values()): err("sitemap.xml: набор адресов не совпадает с каноническими страницами (%d из %d)" % (len(locs), len(canon_of)))
+EXTRA_SITEMAP = [u for u, _ in PT.sitemap_pages()]   # списки и активные товары новых типов (пока типов нет: пусто)
+if sorted(locs) != sorted(list(canon_of.values()) + EXTRA_SITEMAP): err("sitemap.xml: набор адресов не совпадает с каноническими страницами (%d из %d)" % (len(locs), len(canon_of)))
 if len(lastmods) != len(locs) or not all(re.fullmatch(r"\d{4}-\d{2}-\d{2}", d) for d in lastmods): err("sitemap.xml: lastmod не у всех страниц или не в формате даты")
 if any(re.search(r"data/source|naming\.json|README|SKILL|/scripts/|/tests/|/bot/|404\.html|\.txt", u) for u in locs): err("sitemap.xml: во внутренние пути попали: %s" % [u for u in locs if re.search(r"data/source|README|SKILL|scripts|tests|bot|404", u)])
 robots = (ROOT / "robots.txt").read_text(encoding="utf-8")
@@ -159,6 +162,73 @@ else:
         if re.search(r"\*\.txt|/%s" % re.escape(key), internal): err("файл ключа IndexNow закрыт в bot/deploy/Caddyfile")
     wf = ROOT / ".github" / "workflows" / "deploy.yml"
     if wf.exists() and re.search(r"--exclude '[^']*\.txt'", wf.read_text(encoding="utf-8")): err("файл ключа IndexNow исключён в deploy.yml")
+
+# ---------- новые типы товаров: страницы, защита адресов, редиректы, навигация ----------
+type_pages = PT.all_pages_rel()
+FORBID = re.compile("электро[с]танц|портативн\\w*\\s+зарядн\\w*\\s+станци", re.I)
+for guard in PT.check_guard():
+    err("защита индексации: " + guard)
+for tkey, t in PT.load_registry().items():
+    for pr in PT.load_products(tkey):
+        if not pr["_generated"] and (ROOT / pr["_rel"]).exists() and PT.MARK in (ROOT / pr["_rel"]).read_text(encoding="utf-8"):
+            err("%s: товар не опубликован (черновик, не утверждено название или тип), а страница есть" % pr["_rel"])
+index_html = (ROOT / "index.html").read_text(encoding="utf-8")
+if (not PT.nav_types()) and "data-ptype" in index_html: err("index.html: есть пункт навигации раздела, а опубликованных товаров нет")
+for tk in PT.nav_types():
+    if 'data-ptype="%s"' % tk not in index_html: err("index.html: нет пункта навигации раздела %s" % tk)
+for rel in type_pages:
+    t_, p_ = parse(rel)
+    is_list = rel.endswith("/index.html")
+    want = SITE + (rel[: -len("index.html")] if is_list else rel)
+    if p_.heads.count(1) != 1: err("%s: h1 %d шт., нужен один" % (rel, p_.heads.count(1)))
+    if any(b - a > 1 for a, b in zip(p_.heads, p_.heads[1:])): err("%s: скачок уровня заголовков %s" % (rel, p_.heads))
+    if p_.canon != want: err("%s: canonical %r, ожидался %r" % (rel, p_.canon, want))
+    if not p_.metas.get("og:image", "").startswith(SITE): err("%s: нет og:image с абсолютным адресом" % rel)
+    if not p_.metas.get("description") or not p_.title.strip(): err("%s: нет title или description" % rel)
+    if re.search(r'name="robots"[^>]*noindex', t_): err("%s: noindex на странице типа" % rel)
+    if PT.MARK not in t_: err("%s: нет метки генератора" % rel)
+    for field in (p_.title, p_.metas.get("og:title", ""), p_.metas.get("twitter:title", "")):
+        if FORBID.search(field): err("%s: в заголовке название, которое относится только к станциям или запрещено" % rel)
+    for i in p_.imgs:
+        if "alt" not in i or not (i.get("width") and i.get("height")): err("%s: img без alt, width или height: %s" % (rel, i.get("src")))
+    blocks_ld = []
+    for raw_ld in p_.ld:
+        try: blocks_ld.append(json.loads(raw_ld))
+        except Exception as e: err("%s: JSON-LD не парсится: %s" % (rel, e))
+    graph_ = [n for b in blocks_ld for n in (b.get("@graph") or [b])]
+    crumbs_ = [n for n in graph_ if n.get("@type") == "BreadcrumbList"]
+    if len(crumbs_) != 1 or len(crumbs_[0].get("itemListElement", [])) != (2 if is_list else 3): err("%s: хлебные крошки в JSON-LD: нужно %d элемента" % (rel, 2 if is_list else 3))
+    if "breadcrumbs" not in t_: err("%s: нет видимых хлебных крошек" % rel)
+    if is_list:
+        lists_ = [n for n in graph_ if n.get("@type") == "ItemList"]
+        folder = rel.split("/")[0]
+        tkey_ = next(k for k, v in PT.load_registry().items() if v["folder"] == folder)
+        n_active = sum(1 for q in PT.load_products(tkey_) if q["_active"])
+        if len(lists_) != 1 or len(lists_[0].get("itemListElement", [])) != n_active: err("%s: ItemList должен содержать %d активных товаров" % (rel, n_active))
+    else:
+        prods_ = [n for n in graph_ if n.get("@type") == "Product"]
+        if len(prods_) != 1: err("%s: нужен один Product" % rel); continue
+        n = prods_[0]
+        for k in ("name", "sku", "mpn", "url", "description"):
+            if not n.get(k): err("%s: у Product нет %s" % (rel, k))
+        if not (n.get("brand") or {}).get("name"): err("%s: у Product нет brand.name" % rel)
+        q = next(q for q in sum((PT.load_products(k) for k in PT.load_registry()), []) if q["_rel"] == rel)
+        has_price = bool(q.get("price_rub")) and q["status"] == "active"
+        if bool(n.get("offers")) != has_price: err("%s: Offer должен быть только у активного товара с ценой" % rel)
+        if q["status"] == "discontinued" and "снято с продажи" not in re.sub(r"\s+", " ", " ".join(p_.text)).lower(): err("%s: у снятого с продажи товара нет пометки" % rel)
+        if q["status"] == "discontinued" and any(u.endswith(rel) for u in locs): err("%s: снятый с продажи товар не должен быть в sitemap.xml" % rel)
+        for c in q.get("compatible_with", []):
+            cb = PT.combo_of(c)
+            if cb and ("../models/%s.html" % cb["id"].lower()) not in t_: err("%s: нет ссылки на совместимую станцию %s" % (rel, c))
+for r in PT.load_redirects():
+    if r["code"] == 301:
+        path = PT.ROOT / (r["from"].lstrip("/") + ("index.html" if r["from"].endswith("/") else ""))
+        if not path.exists() or PT.MARK_REDIRECT not in path.read_text(encoding="utf-8") or ('rel="canonical" href="%s"' % (SITE.rstrip("/") + r["to"])) not in path.read_text(encoding="utf-8"):
+            err("редирект %s: нет запасной страницы с canonical на %s" % (r["from"], r["to"]))
+caddy = (ROOT / "bot" / "deploy" / "redirects.caddy")
+if not caddy.exists() or any(r["from"] not in caddy.read_text(encoding="utf-8") for r in PT.load_redirects()): err("bot/deploy/redirects.caddy: нет правил для всех записей redirects.json")
+if len(locs) != len(set(locs)): err("sitemap.xml: адреса повторяются")
+pages = pages + type_pages
 
 print("страниц проверено: %d; адресов в sitemap.xml: %d" % (len(pages), len(locs)))
 if errors:
