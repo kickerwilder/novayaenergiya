@@ -1,26 +1,22 @@
 "use strict";
 /* Локальный запуск и запуск на VPS: node server.js
    Читает bot/.env (если файл есть; уже заданные переменные окружения важнее файла). Секреты не печатаются. */
-const fs = require("fs");
 const path = require("path");
 const http = require("http");
-
-function loadDotEnv(file) {
-  let text;
-  try { text = fs.readFileSync(file, "utf8").replace(/^﻿/, ""); } catch (_) { return; }
-  for (let line of text.split(/\r?\n/)) {
-    line = line.trim();
-    if (!line || line[0] === "#" || !line.includes("=")) continue;
-    const i = line.indexOf("=");
-    const k = line.slice(0, i).trim();
-    let v = line.slice(i + 1).trim();
-    if ((v[0] === '"' && v[v.length - 1] === '"') || (v[0] === "'" && v[v.length - 1] === "'")) v = v.slice(1, -1);
-    if (k && process.env[k] === undefined) process.env[k] = v;
-  }
-}
+const { loadDotEnv } = require("./dotenv.js");
 loadDotEnv(path.join(__dirname, ".env"));
 
 const { handle } = require("./core.js");
+const { checkConfig, providerName } = require("./provider.js");
+
+/* Проверка настроек при старте: понятная ошибка (имена переменных, без значений) вместо падения на первом запросе клиента */
+const cfg = checkConfig(process.env);
+cfg.warnings.forEach((w) => console.warn("config: " + w));
+if (cfg.errors.length) {
+  cfg.errors.forEach((e) => console.error("config_error: " + e));
+  console.error("Бот не запущен: исправьте bot/.env и запустите снова.");
+  process.exit(1);
+}
 const PORT = Number(process.env.PORT) || 8787;
 const trustProxy = String(process.env.TRUST_PROXY) === "1"; /* за nginx/балансировщиком: брать IP из X-Forwarded-For */
 
@@ -49,5 +45,5 @@ const server = http.createServer(async (req, res) => {
   }
 });
 const HOST = process.env.HOST || ""; /* HOST=127.0.0.1 — слушать только этот компьютер (локальная разработка) */
-const onListen = () => console.log("bot listening on " + (HOST || "0.0.0.0") + ":" + PORT + " model=" + (process.env.MODEL || "gemini-3.5-flash-lite"));
+const onListen = () => console.log("bot listening on " + (HOST || "0.0.0.0") + ":" + PORT + " provider=" + providerName(process.env) + " model=" + (process.env.MODEL || (providerName(process.env) === "gemini" ? "gemini-3.5-flash-lite" : "")));
 if (HOST) server.listen(PORT, HOST, onListen); else server.listen(PORT, onListen);

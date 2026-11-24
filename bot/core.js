@@ -6,7 +6,8 @@
 const crypto = require("crypto");
 const { loadKb } = require("./kb.js");
 const tools = require("./tools.js");
-const { generate, ProviderError } = require("./provider.js");
+const { ProviderError } = require("./provider.js");
+const llm = require("./llm.js");
 const { maskPII } = require("./pii.js");
 const { notifyManager } = require("./telegram.js");
 
@@ -135,24 +136,11 @@ function clean(text) {
   return String(text).replace(/\*\*/g, "").replace(/`/g, "").replace(/^\s*[*-]\s+/gm, "• ").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-/* ---------- запрос к модели с запасной моделью ---------- */
+/* ---------- запрос к модели ----------
+   Выбор провайдера (PROVIDER), повтор при 429/5xx, запасная модель и учёт токенов: bot/llm.js; ядро не знает, какой провайдер работает. */
 async function callModel(env, args) {
   if (typeof env.__fakeModel === "function") return env.__fakeModel(args); /* только для тестов без LLM: в process.env функции быть не может */
-  const models = [env.MODEL || "gemini-3.5-flash-lite"];
-  if (env.FALLBACK_MODEL && env.FALLBACK_MODEL !== models[0]) models.push(env.FALLBACK_MODEL);
-  let lastErr;
-  for (let i = 0; i < models.length; i++) {
-    const model = models[i];
-    /* при наличии запасной модели первая получает не весь бюджет времени, чтобы запасная успела ответить */
-    const deadline = i === 0 && models.length > 1 ? Math.min(args.deadline, Date.now() + 9000) : args.deadline;
-    try { return await generate(env, Object.assign({}, args, { model, deadline })); }
-    catch (e) {
-      lastErr = e;
-      const retry = e instanceof ProviderError && (e.kind !== "http" || e.status === 404 || e.status === 429 || e.status >= 500);
-      if (!retry || Date.now() > args.deadline - 1500) break;
-    }
-  }
-  throw lastErr;
+  return llm.call(env, args);
 }
 
 async function chat(request, env, origin) {
