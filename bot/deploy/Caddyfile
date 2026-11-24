@@ -108,6 +108,9 @@ www.novaya-energy.ru {
 }
 
 novaya-energy.ru {
+	# Переезды и удалённые адреса: когда в data/source/redirects.json появятся записи, скопируйте сгенерированный bot/deploy/redirects.caddy
+	# рядом с этим файлом и раскомментируйте следующую строку (без неё правила не действуют):
+	# import redirects.caddy
 	import site_files
 }
 

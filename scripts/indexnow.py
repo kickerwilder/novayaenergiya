@@ -3,6 +3,9 @@
 
     python scripts/indexnow.py            только показать, что будет отправлено (ничего не отправляется)
     python scripts/indexnow.py --send     отправить адреса из sitemap.xml
+    python scripts/indexnow.py --new-only --since КОММИТ        только адреса, которых не было в sitemap.xml на коммите КОММИТ (новые после публикации)
+    python scripts/indexnow.py --new-only --known СПИСОК.json   только адреса, которых нет в списке (JSON: массив адресов или {"urls": [...]}, например прежний urls_published.json)
+Флаги можно сочетать с --send; без --send ничего не отправляется (показываются адреса). Без --new-only берутся все адреса sitemap.xml.
 
 Не запускать, пока сайт не опубликован на боевом адресе: перед отправкой скрипт проверяет, что файл ключа
 https://<домен>/<ключ>.txt отдаётся и содержит ключ; если нет, отправка не выполняется.
@@ -13,6 +16,7 @@ https://<домен>/<ключ>.txt отдаётся и содержит клю�
 """
 import json
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -20,6 +24,28 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ENDPOINTS = ["https://yandex.com/indexnow", "https://www.bing.com/indexnow"]
+
+
+def known_urls(argv):
+    """Адреса, которые уже отправлялись: из sitemap.xml на указанном коммите (--since) и/или из файла-списка (--known); None, если --new-only не задан."""
+    if "--new-only" not in argv:
+        return None
+    known = set()
+    if "--since" in argv:
+        ref = argv[argv.index("--since") + 1]
+        r = subprocess.run(["git", "show", "%s:sitemap.xml" % ref], cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8")
+        if r.returncode:
+            sys.exit("--since: не удалось прочитать sitemap.xml на коммите %s" % ref)
+        known |= set(re.findall(r"<loc>(.*?)</loc>", r.stdout))
+    if "--known" in argv:
+        path = Path(argv[argv.index("--known") + 1])
+        d = json.loads(path.read_text(encoding="utf-8"))
+        items = d.get("urls", []) if isinstance(d, dict) else d
+        origin = "https://novaya-energy.ru"
+        known |= {u if u.startswith("http") else origin + u for u in items}
+    if "--since" not in argv and "--known" not in argv:
+        sys.exit("--new-only: укажите, что считать уже отправленным: --since КОММИТ или --known СПИСОК.json")
+    return known
 
 
 def main():
@@ -33,6 +59,13 @@ def main():
     urls = re.findall(r"<loc>(.*?)</loc>", (ROOT / "sitemap.xml").read_text(encoding="utf-8"))
     if not urls:
         sys.exit("В sitemap.xml нет адресов")
+    known = known_urls(sys.argv[1:])
+    if known is not None:
+        urls = [u for u in urls if u not in known]
+        print("Режим --new-only: новых адресов %d" % len(urls))
+        if not urls:
+            print("Новых адресов нет, отправлять нечего.")
+            return
     m = re.match(r"(https://[^/]+)/", urls[0])
     if not m:
         sys.exit("Адрес в sitemap.xml должен начинаться с https://")

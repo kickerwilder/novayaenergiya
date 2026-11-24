@@ -25,6 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import analytics  # noqa: E402
+import product_types as PT  # noqa: E402
 import naming as nm  # noqa: E402
 
 NAMING = nm.load()  # единственный источник наименований товара: data/naming.json
@@ -251,6 +252,7 @@ def main():
     text = replace_between(text, "<!-- SEO:BEGIN -->", "<!-- SEO:END -->", seo_head(graph, seo))
     text = replace_between(text, "<!-- FAQ:BEGIN -->", "<!-- FAQ:END -->", faq_block(faq), indent="  ")
     text = replace_inline(text, "<!--CC:BEGIN-->", "<!--CC:END-->", analytics.consent_tag(seo, ""))
+    text = PT.apply_nav_to_index(text)   # пункты разделов новых типов товаров (пока их нет, текст не меняется)
     text = replace_tight(text, "<!--CCL:BEGIN-->", "<!--CCL:END-->", analytics.settings_link(seo))
     changed = [write_if_changed(INDEX, text)]
 
@@ -284,6 +286,7 @@ def main():
     for c in data["combos"]:
         rel = "models/%s.html" % c["id"].lower()
         pages.append((SITE_URL + rel, rel))
+    pages += PT.sitemap_pages()   # списки и активные товары новых типов (снятые с продажи и черновики не попадают)
     url_tags = "\n".join("  <url>\n    <loc>%s</loc>\n    <lastmod>%s</lastmod>\n  </url>" % (esc(u), lastmod_for(rel)) for u, rel in pages)
     sitemap = ('<?xml version="1.0" encoding="UTF-8"?>\n'
                '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'

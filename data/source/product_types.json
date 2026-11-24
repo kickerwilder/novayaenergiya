@@ -1,0 +1,30 @@
+{
+ "_about": "Реестр типов товаров (солнечные панели, батарейные блоки, аксессуары). Сейчас типов нет: сайт не меняется. Как добавить тип и товары: .claude/skills/novayaenergiya-site/SKILL.md, раздел «Как добавить новый тип или товар». Станции описываются отдельно (data/catalog.js, station_specs.json) и в реестр не входят.",
+ "_type_example": {
+  "<ключ типа латиницей>": {
+   "folder": "папка латиницей в нижнем регистре, например panels",
+   "name_singular": "название в ед. числе (утверждает владелец)",
+   "name_plural": "название во мн. числе",
+   "nav_label": "подпись пункта навигации (по умолчанию name_plural)",
+   "naming_approved": false,
+   "fields": [
+    {
+     "key": "power_w",
+     "label": "Мощность",
+     "unit": "Вт",
+     "required": true
+    }
+   ],
+   "title_template": "{name} — цена | {site}",
+   "description_template": "{name}: характеристики и цена. {summary}",
+   "h1_template": "{name}",
+   "list_title_template": "{type_plural} | {site}",
+   "list_h1_template": "{type_plural}",
+   "list_description_template": "{type_plural} {site}: характеристики, цены и совместимость со станциями.",
+   "list_intro": "",
+   "schema": "Product",
+   "in_bot_kb": false
+  }
+ },
+ "types": {}
+}

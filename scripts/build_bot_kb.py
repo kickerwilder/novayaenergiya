@@ -18,6 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import naming as nm  # noqa: E402
+import product_types as PT  # noqa: E402
 
 NAMING = nm.load()  # единственный источник наименований товара: data/naming.json
 
@@ -178,6 +179,9 @@ def build():
         "clarify": CLARIFY,
         "faq": faq,
     }
+    extra = PT.kb_entries()   # только типы с in_bot_kb = true (по умолчанию ни одного: kb.json не меняется)
+    if extra:
+        kb["products"] = extra
     return kb
 
 
