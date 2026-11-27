@@ -8,7 +8,9 @@
      Twitter, theme-color и JSON-LD (Organization, WebSite, BreadcrumbList, Product на каждую комбинацию мощности и
      ёмкости, FAQPage).
   2. Между <!-- FAQ:BEGIN --> и <!-- FAQ:END --> в теле страницы: видимый блок «Частые вопросы» (<details>) из scripts/faq.json.
-  3. robots.txt и sitemap.xml в корне (lastmod из git-даты файла страницы).
+  3. robots.txt и sitemap.xml в корне (lastmod из git-даты файла страницы). robots.txt всегда без Disallow.
+  3а. Метатег robots noindex,nofollow в <head> главной и privacy.html (маркеры <!--ROBOTS:…-->), пока индексация закрыта
+      (переключатель: scripts/indexing.py); 404.html всегда с noindex.
   4. Коды верификации и Яндекс.Метрика из scripts/seo.json (см. scripts/analytics.py): мета-теги и счётчик в <head> главной, счётчик и абзац
      про веб-аналитику в privacy.html (маркеры <!--CC:…-->, <!--CCL:…-->, <!--YMP:…--> и <!--YMP5:…-->); пустые значения ничего не выводят.
 
@@ -25,6 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import analytics  # noqa: E402
+import indexing  # noqa: E402
 import product_types as PT  # noqa: E402
 import naming as nm  # noqa: E402
 
@@ -145,6 +148,7 @@ def seo_head(graph, seo):
         "<title>%s</title>" % esc(TITLE),
         '<meta name="description" content="%s">' % esc(DESCRIPTION),
         '<link rel="canonical" href="%s">' % esc(SITE_URL),
+    ] + [m for m in [indexing.robots_meta()] if m] + [
         '<meta name="theme-color" content="%s">' % THEME_COLOR,
         '<meta property="og:type" content="website">',
         '<meta property="og:site_name" content="%s">' % esc(SITE_NAME),
@@ -267,6 +271,7 @@ def main():
     # privacy.html: счётчик Метрики в <head> и абзац про веб-аналитику (только при подключённом счётчике, scripts/seo.json)
     priv_path = ROOT / "privacy.html"
     priv = priv_path.read_text(encoding="utf-8").replace("\r\n", "\n")
+    priv = replace_inline(priv, "<!--ROBOTS:BEGIN-->", "<!--ROBOTS:END-->", indexing.robots_meta())
     priv = replace_inline(priv, "<!--CC:BEGIN-->", "<!--CC:END-->", analytics.consent_tag(seo, ""))
     priv = replace_tight(priv, "<!--CCL:BEGIN-->", "<!--CCL:END-->", analytics.settings_link(seo))
     priv = replace_inline(priv, "<!--YMP:BEGIN-->", "<!--YMP:END-->", analytics.privacy_section(seo))

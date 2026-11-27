@@ -165,13 +165,9 @@
 - В `index.html` скрипт заполняет два блока между маркерами: `<!-- SEO:BEGIN -->…<!-- SEO:END -->` в `<head>` (title, description, canonical, Open Graph, Twitter, theme-color, JSON-LD: Organization, WebSite, BreadcrumbList, Product на каждую модель с ценой и FAQPage) и `<!-- FAQ:BEGIN -->…<!-- FAQ:END -->` (видимый блок «Частые вопросы»). Руками между маркерами ничего не правьте.
 - Тексты вопросов и ответов лежат в `scripts/faq.json`. Если у модели все версии «по запросу» (цена 0), её `Product` выводится без `offers`.
 - **После любого обновления цен или каталога запускайте `python scripts/build_all.py`**: он по порядку выполняет `update_charge_estimates.py` (ориентировочное время зарядки `data/charge.js`), `build_bot_kb.py` (база знаний чата `data/kb.json`) и `build_seo.py`. Порядок: `import_prices.py` (или `update_*.py`), затем `build_all.py`.
-- `robots.txt` намеренно без `Disallow`: сайт закрыт от индексации тегом `<meta name="robots" content="noindex,nofollow">` в `<head>` (рядом комментарий «убрать при запуске на своём домене»), а запрет обхода помешал бы поисковику этот тег прочитать.
+- **Сайт открыт для индексации:** `INDEXABLE = True` в `scripts/indexing.py`, на публичных страницах нет `noindex` (он всегда только на `404.html`), `robots.txt` без `Disallow`. Переключатель `False` ставит `<meta name="robots" content="noindex,nofollow">` на главную, `privacy.html`, страницы моделей и типов товаров; закрывать только по решению владельца и вместе с заголовком `X-Robots-Tag` в `bot/deploy/Caddyfile` (`bot/DEPLOY.md`, пункт 3.12). Поддомены `bot` и `preview` закрыты всегда.
 
-**При переезде на свой домен:**
-1. Поменять `SITE_URL` в `scripts/build_seo.py` и запустить `python scripts/build_seo.py`.
-2. Убрать из `index.html` строку `<meta name="robots" content="noindex,nofollow">` и комментарий к ней.
-3. Добавить `CNAME` и DNS-записи (см. ниже), включить HTTPS.
-4. Добавить сайт в Яндекс Вебмастер и Google Search Console, отправить `sitemap.xml`.
+**Переезд на свой сервер** (с GitHub Pages на VPS): `bot/DEPLOY.md`, раздел «Перенос сайта с GitHub Pages». При смене адреса сайта поменяйте `SITE_URL` в `scripts/build_seo.py` и запустите `python scripts/build_all.py`.
 
 ## Чат-консультант
 

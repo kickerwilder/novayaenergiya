@@ -7,7 +7,8 @@
   - JSON-LD: парсится; Product (name, image, description, sku, mpn, brand, url, offers с ценой из data/prices.js), FAQPage (вопросы и ответы,
     совпадают с видимым FAQ), BreadcrumbList на страницах моделей; Offer только при цене, которая показана на странице;
   - sitemap.xml: только канонические страницы (31), lastmod в формате даты, внутренних путей нет; robots.txt: Allow для всего, строка Sitemap;
-  - есть 404.html; нет noindex на публичных страницах; название товара: запрещённое слово не в title, og:title, twitter:title;
+  - есть 404.html (всегда noindex); на публичных страницах метатег noindex,nofollow есть при закрытой индексации и отсутствует при открытой
+    (scripts/indexing.py; разовая открытая сборка проверяется с --indexable); название товара: запрещённое слово не в title, og:title, twitter:title;
   - файл ключа IndexNow лежит в корне и не закрыт ни _config.yml, ни правилами Caddy и деплоя.
 """
 import glob
@@ -20,12 +21,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 import product_types as PT  # noqa: E402
+import indexing  # noqa: E402
 SITE = "https://novaya-energy.ru/"
 errors = []
 
 
 def err(msg):
     errors.append(msg)
+
+
+# ожидаемый режим: константа scripts/indexing.py; для проверки разовой сборки build_all.py --indexable: python tests/seo_check.py --indexable
+INDEXABLE = indexing.INDEXABLE or "--indexable" in sys.argv[1:]
+
+
+def check_robots(rel, text):
+    found = re.findall(r'<meta\s+name="robots"[^>]*>', text)
+    if INDEXABLE and found:
+        err("%s: индексация открыта, а на странице есть метатег robots" % rel)
+    if not INDEXABLE and found != [indexing.ROBOTS_META]:
+        err("%s: индексация закрыта, нужен ровно один %s (найдено: %s)" % (rel, indexing.ROBOTS_META, found))
 
 
 class Page(HTMLParser):
@@ -80,6 +94,7 @@ robots = (ROOT / "robots.txt").read_text(encoding="utf-8")
 if not re.search(r"(?m)^Allow:\s*/\s*$", robots) or "Disallow: /\n" in robots + "\n" and re.search(r"(?m)^Disallow:\s*/\s*$", robots): err("robots.txt: нужен Allow: / и не должно быть Disallow: / для основного домена")
 if "Sitemap: %ssitemap.xml" % SITE not in robots: err("robots.txt: нет строки Sitemap")
 if not (ROOT / "404.html").exists(): err("нет 404.html")
+elif not re.search(r'<meta name="robots" content="noindex[^"]*">', (ROOT / "404.html").read_text(encoding="utf-8")): err("404.html: всегда должен быть noindex")
 
 # ---------- страницы ----------
 faq_visible = 0
@@ -90,7 +105,7 @@ for rel in pages:
     if p.canon != canon_of[rel]: err("%s: canonical %r, ожидался %r" % (rel, p.canon, canon_of[rel]))
     if not p.metas.get("og:image", "").startswith(SITE): err("%s: нет og:image с абсолютным адресом" % rel)
     if not p.metas.get("description"): err("%s: нет description" % rel)
-    if re.search(r'name="robots"[^>]*noindex', t): err("%s: noindex на публичной странице" % rel)
+    check_robots(rel, t)
     for name in ("og:title", "twitter:title"):
         if re.search("электро[с]танц", p.metas.get(name, ""), re.I): err("%s: запрещённое название товара в %s" % (rel, name))
     if re.search("электро[с]танц", p.title, re.I): err("%s: запрещённое название товара в title" % rel)
@@ -163,6 +178,25 @@ else:
     wf = ROOT / ".github" / "workflows" / "deploy.yml"
     if wf.exists() and re.search(r"--exclude '[^']*\.txt'", wf.read_text(encoding="utf-8")): err("файл ключа IndexNow исключён в deploy.yml")
 
+# ---------- Caddyfile и индексация: заголовок X-Robots-Tag на основном домене должен соответствовать константе INDEXABLE ----------
+cf = ROOT / "bot" / "deploy" / "Caddyfile"
+if cf.exists():
+    c = cf.read_text(encoding="utf-8").replace("\r\n", "\n")
+
+    def block(head):
+        m = re.search(r"(?ms)^%s \{\n(.*?)^\}" % re.escape(head), c)
+        if not m:
+            err("Caddyfile: не найден блок %s" % head)
+            return None
+        return "\n".join(l for l in m.group(1).split("\n") if not l.strip().startswith("#"))
+    main_blocks = [b for b in (block("novaya-energy.ru"), block("(site_files)"), block("(security_headers)")) if b is not None]
+    closed_header = any("X-Robots-Tag" in b for b in main_blocks)
+    if indexing.INDEXABLE and closed_header: err("Caddyfile: сайт открыт (INDEXABLE = True), а основной домен отдаёт X-Robots-Tag")
+    if not indexing.INDEXABLE and not closed_header: err("Caddyfile: сайт закрыт (INDEXABLE = False), а заголовка X-Robots-Tag на основном домене нет")
+    bot = block("bot.novaya-energy.ru")
+    if bot is not None and 'X-Robots-Tag "noindex, nofollow"' not in bot: err("Caddyfile: поддомен bot должен оставаться с X-Robots-Tag noindex")
+    if not re.search(r'(?m)^# preview\.novaya-energy\.ru \{\n# \theader X-Robots-Tag "noindex, nofollow"', c): err("Caddyfile: блок preview должен оставаться с X-Robots-Tag noindex")
+
 # ---------- новые типы товаров: страницы, защита адресов, редиректы, навигация ----------
 type_pages = PT.all_pages_rel()
 FORBID = re.compile("электро[с]танц|портативн\\w*\\s+зарядн\\w*\\s+станци", re.I)
@@ -185,7 +219,7 @@ for rel in type_pages:
     if p_.canon != want: err("%s: canonical %r, ожидался %r" % (rel, p_.canon, want))
     if not p_.metas.get("og:image", "").startswith(SITE): err("%s: нет og:image с абсолютным адресом" % rel)
     if not p_.metas.get("description") or not p_.title.strip(): err("%s: нет title или description" % rel)
-    if re.search(r'name="robots"[^>]*noindex', t_): err("%s: noindex на странице типа" % rel)
+    check_robots(rel, t_)
     if PT.MARK not in t_: err("%s: нет метки генератора" % rel)
     for field in (p_.title, p_.metas.get("og:title", ""), p_.metas.get("twitter:title", "")):
         if FORBID.search(field): err("%s: в заголовке название, которое относится только к станциям или запрещено" % rel)
@@ -235,4 +269,4 @@ if errors:
     print("ОШИБОК: %d" % len(errors))
     for e in errors[:60]: print(" -", e)
     sys.exit(1)
-print("seo_check: всё чисто")
+print("seo_check: всё чисто (индексация %s)" % ("открыта" if INDEXABLE else "закрыта"))

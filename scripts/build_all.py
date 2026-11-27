@@ -10,13 +10,28 @@
 4. scripts/build_seo.py     -> index.html (SEO-блоки и FAQ), robots.txt, sitemap.xml (станции и опубликованные товары всех типов)
 
 Цены сначала обновляются отдельно (scripts/import_prices.py), затем запускается этот скрипт.
+
+Индексацией управляет константа INDEXABLE в scripts/indexing.py (сейчас True: сайт открыт, метатега noindex нет).
+python scripts/build_all.py --indexable нужен только при INDEXABLE = False: разовая сборка без метатега; следующий запуск без флага снова закроет сайт.
 """
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import indexing  # noqa: E402
+
 STEPS = ["build_naming.py", "add_dc_voltage.py", "update_charge_estimates.py", "build_bot_kb.py", "build_models.py", "build_product_types.py", "build_seo.py"]
+
+unknown = [a for a in sys.argv[1:] if a != "--indexable"]
+if unknown:
+    sys.exit("Неизвестный аргумент: %s (поддерживается только --indexable)" % " ".join(unknown))
+os.environ.pop(indexing.ENV, None)   # открыть индексацию могут только флаг команды или константа, случайная переменная окружения не влияет
+if "--indexable" in sys.argv[1:]:
+    os.environ[indexing.ENV] = "1"
+print("Индексация: " + ("ОТКРЫТА, метатега noindex нет" if indexing.indexable() else "закрыта (noindex,nofollow)"), flush=True)
 
 for name in STEPS:
     print("==> " + name)

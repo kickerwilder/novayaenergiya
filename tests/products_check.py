@@ -213,7 +213,7 @@ def main():
     rc, out = run_py(site, "tests/seo_check.py"); check(rc == 0, "seo_check с редиректом: " + out[-300:])
     write_json(P("data/source/redirects.json"), {"redirects": [{"from": "/panels/tp-100.html", "code": 410}]})
     rc, out = build(site)
-    check(rc == 0 and not P("panels/tp-100.html").exists() and 'respond @redirect1 "Страница удалена" 410' in read(P("bot/deploy/redirects.caddy")), "410: запасная страница удалена, правило Caddy respond 410: " + out[-200:])
+    check(rc == 0 and not P("panels/tp-100.html").exists() and 'handle @redirect1 {\n\trespond "Страница удалена" 410\n}' in read(P("bot/deploy/redirects.caddy")).replace("\r\n", "\n"), "410: запасная страница удалена, правило Caddy в блоке handle (без него общий handle перехватывает и отдаёт 404): " + out[-200:])
     write_json(P("data/source/redirects.json"), {"redirects": [{"from": "/panels/tp-100.html", "to": "/panels/net-takoj.html", "code": 301}]})
     rc, out = build(site); check(rc != 0 and "net-takoj" in out, "цель 301, которой нет на сайте, должна ронять сборку")
     write_json(P("data/source/redirects.json"), {"redirects": [{"from": "/panels/tp-100.html", "code": 410}]})

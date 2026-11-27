@@ -1,8 +1,16 @@
-# Шаблон Caddyfile для VPS (Ubuntu 24.04, Caddy 2.7+). Копируется в /etc/caddy/Caddyfile, перед включением: caddy validate --config /etc/caddy/Caddyfile
-# Секретов и IP здесь нет. Порядок запуска и проверки: bot/DEPLOY.md.
+# =====================================================================================================
+# ЗАМЕНИТЬ НА СЕРВЕРЕ (реальные значения в репозиторий не вносить, он публичный):
+#   1. ВАШ_EMAIL    — блок { } ниже: e-mail для уведомлений Let's Encrypt.
+#   2. ХЭШ_ПАРОЛЯ   — блок preview.novaya-energy.ru внизу файла: вывод команды `caddy hash-password`.
+# Проверка после правки (вывод должен быть пустым: незаменённых значений в действующих строках нет):
+#   grep -nE '^[^#]*(ВАШ_EMAIL|ХЭШ_ПАРОЛЯ)' /etc/caddy/Caddyfile
+# =====================================================================================================
+# Шаблон Caddyfile для VPS (Ubuntu 24.04, Caddy 2.8+: директива basic_auth). Копируется в /etc/caddy/Caddyfile,
+# перед включением: caddy validate --config /etc/caddy/Caddyfile
+# Секретов и IP здесь нет. Порядок запуска, переноса и проверки: bot/DEPLOY.md.
 #
 # Два сервиса на одном сервере:
-#   1) bot.novaya-energy.ru  — бот (reverse proxy на 127.0.0.1:8787), закрыт от индексации; на основной домен это НЕ распространяется
+#   1) bot.novaya-energy.ru  — бот (reverse proxy на 127.0.0.1:8787), всегда закрыт от индексации
 #   2) novaya-energy.ru и www — сайт из /srv/site (статические файлы)
 
 {
@@ -16,8 +24,8 @@
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		X-Frame-Options "SAMEORIGIN"
-		# HSTS включить ТОЛЬКО после проверки HTTPS на всех адресах (снять комментарий и перезагрузить Caddy):
-		# Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# HSTS короткий: через неделю после проверки поднять до max-age=31536000 и только потом думать о includeSubDomains
+		Strict-Transport-Security "max-age=300"
 		-Server
 	}
 }
@@ -49,19 +57,25 @@
 
 	# --- всё остальное: обычные файлы (robots.txt, sitemap.xml, файл ключа IndexNow <ключ>.txt, data/*.js, data/kb.json, картинки и т. д.)
 	handle {
-		# кэш: html короткий; css и js на сутки (в адресе нет версии); картинки и видео на неделю; шрифты на год
-		@html path / *.html
-		header @html Cache-Control "public, max-age=300, must-revalidate"
-		@code path *.css *.js
-		header @code Cache-Control "public, max-age=86400"
-		@data path /data/*.json
-		header @data Cache-Control "public, max-age=300, must-revalidate"
-		@media path *.png *.jpg *.jpeg *.webp *.svg *.ico *.mp4
-		header @media Cache-Control "public, max-age=604800"
-		@fonts path *.woff2 *.woff
-		header @fonts Cache-Control "public, max-age=31536000, immutable"
-		@seo path /robots.txt /sitemap.xml
-		header @seo Cache-Control "public, max-age=3600"
+		# кэш (в адресах файлов нет версии, поэтому код и данные перепроверяются часто; ETag отдаёт file_server, повторный запрос получает 304):
+		#   главная, sitemap.xml, robots.txt: no-cache (перед использованием всегда проверять на сервере)
+		@nocache path / /index.html /sitemap.xml /robots.txt
+		header @nocache Cache-Control "no-cache"
+		#   остальные страницы (privacy.html, models/*.html и т. п.): 5 минут
+		@pages {
+			path *.html
+			not path /index.html
+		}
+		header @pages Cache-Control "public, max-age=300, must-revalidate"
+		#   js, css и всё в data/: 5 минут
+		@code path *.js *.css /data/*
+		header @code Cache-Control "public, max-age=300, must-revalidate"
+		#   img/ (в том числе hero.mp4) и fonts/: 30 дней. Заменяя картинку, видео или шрифт, давайте новое имя файла
+		@static path /img/* /fonts/*
+		header @static Cache-Control "public, max-age=2592000"
+		#   значки в корне сайта: неделя (в страницах у них есть ?v=)
+		@icons path /favicon.ico /favicon.svg /apple-touch-icon.png /icon-192.png /icon-512.png
+		header @icons Cache-Control "public, max-age=604800"
 
 		# file_server сам отдаёт Range-запросы (частичные ответы 206): нужно для img/hero.mp4
 		file_server
@@ -69,6 +83,10 @@
 
 	# --- свой 404 из /srv/site/404.html с кодом 404
 	handle_errors {
+		# защитные заголовки (в том числе HSTS) на ответы с ошибкой из основного блока не переносятся, поэтому подключаются и здесь
+		import security_headers
+		# ошибки не кэшировать: без этого 404 на отсутствующий файл из img/ или assets/ получил бы долгий срок хранения своего пути
+		header Cache-Control "no-cache"
 		@notfound expression {err.status_code} == 404
 		handle @notfound {
 			rewrite * /404.html
@@ -108,6 +126,8 @@ www.novaya-energy.ru {
 }
 
 novaya-energy.ru {
+	# Основной сайт открыт для индексации (INDEXABLE = True в scripts/indexing.py), поэтому заголовка X-Robots-Tag здесь нет.
+	# Закрывать только вместе с INDEXABLE = False и по решению владельца (bot/DEPLOY.md, пункт 3.12).
 	# Переезды и удалённые адреса: когда в data/source/redirects.json появятся записи, скопируйте сгенерированный bot/deploy/redirects.caddy
 	# рядом с этим файлом и раскомментируйте следующую строку (без неё правила не действуют):
 	# import redirects.caddy

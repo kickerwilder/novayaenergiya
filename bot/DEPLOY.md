@@ -3,6 +3,19 @@
 Один сервер, несколько сервисов. Здесь: чат-бот (Docker) и размещение сайта (Caddy). Секретов, паролей и адресов сервера в этом файле нет: подставляйте свои значения только на сервере.
 Файл лежит в `bot/` и на сайт не публикуется (`_config.yml`, исключения деплоя, закрытые пути в Caddy).
 
+> ### Замените на сервере (в репозиторий реальные значения не вносить)
+>
+> | Плейсхолдер в `/etc/caddy/Caddyfile` | Что подставить | Где в файле |
+> | --- | --- | --- |
+> | **`ВАШ_EMAIL`** | e-mail для уведомлений Let's Encrypt | первый блок `{ … }` |
+> | **`ХЭШ_ПАРОЛЯ`** | вывод `caddy hash-password` (пароль тестового стенда) | блок `preview.novaya-energy.ru` |
+>
+> Проверка, что в действующих строках ничего не осталось (вывод пустой): `grep -nE '^[^#]*(ВАШ_EMAIL|ХЭШ_ПАРОЛЯ)' /etc/caddy/Caddyfile`
+>
+> Значения в угловых скобках и слово `ПАРОЛЬ` в командах ниже тоже подставляются только в своей консоли.
+
+Перенос сайта на этот сервер: раздел 3 «Перенос сайта с GitHub Pages».
+
 Что понадобится: Ubuntu 24.04 с доступом по SSH (пользователь с `sudo`), домен `novaya-energy.ru` с управлением DNS, ключ Google AI Studio, SOCKS5 или HTTP прокси для Gemini и Telegram (сервер в Москве, они напрямую недоступны), бот в Telegram (создаётся у @BotFather) и аккаунт менеджера, которому будут приходить обращения.
 
 ## 1. Подготовка сервера
@@ -39,7 +52,7 @@ sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sud
    | `LLM_USE_PROXY` | `1` (по умолчанию): к модели через `PROXY_URL`; `0`: к модели напрямую (прокси только для Telegram) |
    | `ALLOWED_ORIGINS` | `https://novaya-energy.ru,https://www.novaya-energy.ru` |
    | `ALLOW_LOCALHOST` | `0` на сервере |
-   | `KB_URL` | пусто: бот читает `/srv/site/data/kb.json`, который деплой сайта обновляет вместе с сайтом |
+   | `KB_URL` | пусто: бот читает `/srv/site/data/kb.json`, который деплой сайта обновляет вместе с сайтом (права: пункт 3.1). Запасной вариант: `https://novaya-energy.ru/data/kb.json` (бот скачивает базу с сайта напрямую, без `PROXY_URL`, кэш 5 минут) |
    | `DAILY_CAP`, `RATE_LIMIT`, `RATE_WINDOW_S` | лимиты (по умолчанию 500 в сутки, 20 запросов за 600 с на клиента) |
 
    Остальное (`PORT`, `HOST`, `TRUST_PROXY`) задаёт `docker-compose.yml`.
@@ -59,17 +72,17 @@ sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sud
    docker compose run --rm bot node tg_chat_id.js
    ```
    Скрипт печатает id и название чатов (тексты сообщений не выводит). Впишите нужный id в `TELEGRAM_MANAGER_CHAT_ID`. Если скрипт отвечает ошибкой, убедитесь, что у бота не включён вебхук.
-5. **Запуск.**
+5. **Запуск.** Перед первым запуском создайте каталог сайта с правами из пункта 3.1: если `/srv/site/data` нет, Docker создаст его от root, и деплой не сможет в него писать, а при пустом каталоге у бота не будет базы знаний (тогда временно задайте `KB_URL`).
    ```bash
    docker compose up -d --build
    curl -s http://127.0.0.1:8787/health        # {"ok":true}
    docker compose ps                            # состояние healthy
    docker compose logs --tail 50 bot            # в логах нет текстов диалогов и контактов клиентов
    ```
-6. **Caddy и поддомен бота.** В DNS создайте A-запись `bot.novaya-energy.ru` на адрес сервера. Затем:
+6. **Caddy и поддомен бота.** Нужен Caddy 2.8 или новее. В DNS создайте A-запись `bot.novaya-energy.ru` на адрес сервера. Затем:
    ```bash
    sudo cp /opt/novaya/repo/bot/deploy/Caddyfile /etc/caddy/Caddyfile
-   sudo nano /etc/caddy/Caddyfile        # впишите e-mail в блок {} (для Let's Encrypt)
+   sudo nano /etc/caddy/Caddyfile        # e-mail вместо ВАШ_EMAIL; пока основной домен смотрит на GitHub, закомментируйте блоки www.novaya-energy.ru и novaya-energy.ru (пункт 3.2)
    caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy
    ```
    Проверка снаружи:
@@ -85,57 +98,210 @@ sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sud
 
 Обновление бота: `cd /opt/novaya/repo && git pull && cd bot && docker compose up -d --build`. Смена ключа или прокси: правка `.env` и `docker compose up -d`.
 
-## 3. Размещение сайта на сервере
+## 3. Перенос сайта с GitHub Pages
 
-Сайт переезжает с GitHub Pages на сервер: статические файлы в `/srv/site`, раздаёт Caddy (конфигурация в `bot/deploy/Caddyfile`, блок `novaya-energy.ru`). Канонический адрес `https://novaya-energy.ru/` (без `www`), `www` редиректит на него; адреса страниц не меняются. Внутренние пути (`data/source`, `data/naming.json`, `README.md`, `SKILL.md`, `.claude`, `scripts`, `tests`, `bot`, `.git`) закрыты (404) и в выкладку не попадают.
+Сайт переезжает с GitHub Pages на сервер: статические файлы в `/srv/site`, раздаёт Caddy (`bot/deploy/Caddyfile`). Канонический адрес `https://novaya-energy.ru/` (без `www`), `www` редиректит на него; адреса страниц не меняются. Внутренние пути (`data/source`, `data/naming.json`, `README.md`, `SKILL.md`, `.claude`, `.github`, `scripts`, `tests`, `bot`, `.git`, `_config.yml`, `CNAME`) в выкладку не попадают и в Caddy закрыты (404).
 
-### 3.1. Каталог и пользователь для деплоя
+**Сайт открыт для индексации, и при переезде это не меняется:** в страницах нет метатега `noindex` (`INDEXABLE = True` в `scripts/indexing.py`), на основном домене в `Caddyfile` нет заголовка `X-Robots-Tag`. Адреса страниц, `robots.txt` и `sitemap.xml` те же. Закрыты всегда: поддомен `bot` и тестовый стенд `preview` (заголовок `X-Robots-Tag`, стенд ещё и паролем), страница 404 (метатег). Проверки индексации и поисковые кабинеты: пункт 3.12.
+
+До пункта 3.9 GitHub Pages остаётся включённым: это путь отката.
+
+Порядок: 3.1 сервер → 3.2 тестовый стенд → 3.3 секреты → 3.4 ручная выкладка → 3.5 TTL → 3.6 переключение DNS → 3.7 проверки → 3.8 откат (если нужен) → 3.9 отключение Pages → 3.10 автодеплой → 3.11 HSTS на год → 3.12 индексация и поисковые кабинеты.
+
+Что делает выкладка (`.github/workflows/deploy.yml`): проверяет, что закоммиченная сборка актуальна; складывает файлы сайта без внутренних путей в `_site`; сохраняет копию сборки; копирует `_site/` в `/srv/site/` командой `rsync -az --delete`; проверяет сайт по HTTPS (smoke-тест). На сервер пишет только этот `rsync`, назначение `/srv/site/` задано в команде. `--delete` удаляет только то, что лежит внутри `/srv/site` и чего нет в сборке (в том числе положенное туда вручную: не храните там ничего своего). Вне `/srv/site` ничего не меняется.
+
+### 3.1. Сервер: пользователь деплоя и права
 
 ```bash
+sudo apt install -y rsync
 sudo adduser --disabled-password --gecos "" deploy
-sudo mkdir -p /srv/site && sudo chown deploy:caddy /srv/site && sudo chmod 2750 /srv/site
-sudo -u deploy ssh-keygen -t ed25519 -f /home/deploy/.ssh/id_deploy -N "" -C "github-deploy"   # ключ: пара создаётся на сервере
+sudo mkdir -p /srv/site/data
+sudo chown -R deploy:caddy /srv/site                        # -R исправляет и каталог data, если его раньше создал Docker от root
+sudo find /srv/site -type d -exec chmod 755 {} +
+sudo find /srv/site -type f -exec chmod 644 {} +
+sudo -u deploy mkdir -p -m 700 /home/deploy/.ssh
+sudo -u deploy ssh-keygen -t ed25519 -f /home/deploy/.ssh/id_deploy -N "" -C "github-deploy"
 sudo -u deploy sh -c 'cat /home/deploy/.ssh/id_deploy.pub >> /home/deploy/.ssh/authorized_keys && chmod 600 /home/deploy/.ssh/authorized_keys'
 ```
-Пользователь `deploy` без sudo и без пароля; пишет только в `/srv/site`, группа `caddy` читает. (Дополнительная защита, по желанию: ограничить ключ в `authorized_keys` командой `rrsync`.) Бот читает `/srv/site/data/kb.json` (том в `docker-compose.yml`), поэтому каталог должен быть читаемым для Docker.
 
-### 3.2. Secrets репозитория и первая выкладка
+Это публичная статика, поэтому читать её могут все: каталоги `755`, файлы `644`. Так файлы читают и Caddy (пользователь `caddy`), и бот в контейнере (непривилегированный пользователь, не входит в группу `caddy`), которому нужен `/srv/site/data/kb.json`. Писать может только `deploy` (без sudo и без пароля). Выкладка сама держит эти права (`rsync --chmod=D755,F644`). Дополнительная защита по желанию: ограничить ключ в `authorized_keys` командой `rrsync`.
 
-В GitHub → Settings → Secrets and variables → Actions создайте: `DEPLOY_SSH_KEY` (содержимое закрытого ключа `/home/deploy/.ssh/id_deploy`, затем удалите его копии вне сервера), `DEPLOY_KNOWN_HOSTS` (вывод `ssh-keyscan -t ed25519 <адрес-сервера>`), `DEPLOY_HOST`, `DEPLOY_USER` (`deploy`), `DEPLOY_PORT` (если не 22).
-Запуск: Actions → deploy-site → Run workflow. Workflow `.github/workflows/deploy.yml` запускается только вручную; автозапуск по пушу в `main` включается снятием комментария в файле, когда решите. Каждый запуск сохраняет копию сборки (артефакт `site-build`, хранится 30 дней).
+Проверка:
+```bash
+stat -c '%a %U:%G %n' /srv /srv/site /srv/site/data         # /srv/site и data: 755 deploy:caddy; у /srv должно быть право входа для всех
+sudo -u nobody ls /srv/site/data > /dev/null && echo "чтение: ok"
+sudo -u nobody test -w /srv/site && echo "ПЛОХО: пишет посторонний" || echo "запись посторонним закрыта: ok"
+```
 
-### 3.3. Проверка сайта на временном адресе
+Если бот уже работает, посмотрите, откуда он сейчас берёт базу знаний (команда печатает только число): `grep -c '^KB_URL=http' /opt/novaya/repo/bot/.env` (`1` — скачивает по адресу, `0` — читает `/srv/site/data/kb.json`). После изменения прав и каталога перезапустите контейнер: `cd /opt/novaya/repo/bot && docker compose up -d --force-recreate`.
 
-1. В DNS создайте A-запись `preview.novaya-energy.ru` на сервер.
-2. В `/etc/caddy/Caddyfile` раскомментируйте блок `preview.novaya-energy.ru`, подставьте хэш пароля (`caddy hash-password`), `caddy validate` и `sudo systemctl reload caddy`.
-3. Проверьте (с паролем `-u preview:ПАРОЛЬ`): главная, `privacy.html`, `models/z1600-5000.html`, `data/kb.json`, `sitemap.xml` отдают 200; закрытые пути возвращают 404:
+**Запасной вариант**, если бот не читает файл из тома: в `bot/.env` задайте `KB_URL=https://novaya-energy.ru/data/kb.json` и выполните `docker compose up -d`. Бот будет скачивать базу с сайта напрямую (не через `PROXY_URL`), кэш 5 минут; при временном сбое работает на прошлой копии.
+
+### 3.2. Тестовый стенд preview.novaya-energy.ru
+
+1. В DNS создайте A-запись `preview.novaya-energy.ru` на сервер (TTL 300).
+2. Обновите конфигурацию Caddy (нужна версия 2.8 или новее: `caddy version`):
+   ```bash
+   sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak-$(date +%F)
+   sudo cp /opt/novaya/repo/bot/deploy/Caddyfile /etc/caddy/Caddyfile
+   caddy hash-password                  # спросит пароль для стенда и напечатает хэш
+   sudo nano /etc/caddy/Caddyfile
+   ```
+   В файле:
+   - впишите e-mail вместо `ВАШ_EMAIL`;
+   - **пока DNS основного домена смотрит на GitHub**, закомментируйте блоки `www.novaya-energy.ru { … }` и `novaya-energy.ru { … }` (иначе Caddy будет безуспешно запрашивать для них сертификаты и может упереться в лимиты Let's Encrypt); блок `bot.novaya-energy.ru` не трогайте;
+   - раскомментируйте блок `preview.novaya-energy.ru` и вставьте хэш вместо `ХЭШ_ПАРОЛЯ`.
+3. Примените:
+   ```bash
+   grep -nE '^[^#]*(ВАШ_EMAIL|ХЭШ_ПАРОЛЯ)' /etc/caddy/Caddyfile      # пусто
+   sudo caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile && sudo systemctl reload caddy
+   curl -s -o /dev/null -w "%{http_code}\n" https://preview.novaya-energy.ru/     # 401: пароль спрашивается
+   curl -s https://bot.novaya-energy.ru/health                                    # {"ok":true}: бот не задет
+   ```
+
+### 3.3. Секреты GitHub Actions (5 штук)
+
+Где: репозиторий на GitHub → Settings → Secrets and variables → Actions → вкладка Secrets → New repository secret. Значения вписываются только туда: не в репозиторий, не в чаты.
+
+| Имя | Что внести |
+| --- | --- |
+| `DEPLOY_SSH_KEY` | закрытый ключ целиком, вместе с первой и последней строками: `sudo cat /home/deploy/.ssh/id_deploy` |
+| `DEPLOY_KNOWN_HOSTS` | вывод `ssh-keyscan -t ed25519 <адрес-сервера>` (если порт не 22, добавьте `-p ПОРТ`); адрес тот же, что в `DEPLOY_HOST`. Отпечаток сверьте на сервере: `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` и `ssh-keyscan -t ed25519 <адрес-сервера> \| ssh-keygen -lf -` |
+| `DEPLOY_HOST` | адрес сервера (не `novaya-energy.ru`: до переключения он ведёт на GitHub) |
+| `DEPLOY_USER` | `deploy` |
+| `DEPLOY_PORT` | порт SSH (`22`, если не меняли) |
+
+После того как ключ внесён в секрет, удалите закрытую половину с сервера и её копии у себя: `sudo shred -u /home/deploy/.ssh/id_deploy` (в `authorized_keys` остаётся открытая). Порт SSH должен быть открыт для всех адресов: у запусков GitHub Actions адреса меняются.
+
+### 3.4. Ручная выкладка и проверка стенда
+
+1. GitHub → Actions → **deploy-site** → Run workflow, ветка `main`, **флажок smoke-теста снимите**: домен ещё ведёт на GitHub, и тест это обнаружит и завершится ошибкой.
+2. На сервере:
+   ```bash
+   stat -c '%a %U:%G %n' /srv/site /srv/site/data /srv/site/data/kb.json /srv/site/index.html     # 755, 755, 644, 644
+   cd /opt/novaya/repo/bot && docker compose exec bot node -e "JSON.parse(require('fs').readFileSync('/app/data/kb.json','utf8')); console.log('kb.json читается')"
+   ```
+3. Стенд (подставьте пароль стенда; в историю команд он попадёт, поэтому после проверки смените его или уберите блок):
    ```bash
    B=https://preview.novaya-energy.ru; A="-u preview:ПАРОЛЬ"
-   for p in "" privacy.html models/z1600-5000.html data/kb.json data/catalog.js assets/app.js sitemap.xml robots.txt; do curl -s $A -o /dev/null -w "%{http_code}  /$p\n" "$B/$p"; done
-   for p in data/source/station_specs.json data/naming.json README.md SKILL.md scripts/build_seo.py tests/bot_cases.json bot/DEPLOY.md .git/config .claude/skills/novayaenergiya-site/SKILL.md nonexistent-page; do curl -s $A -o /dev/null -w "%{http_code}  /$p\n" "$B/$p"; done   # все 404
-   curl -s $A -I "$B/nonexistent-page" | head -1                                  # HTTP/2 404 (тело — наша страница 404.html)
-   curl -s $A -I -r 0-99 "$B/img/hero.mp4" | head -3                              # HTTP/2 206, Accept-Ranges: bytes
-   curl -s $A -I "$B/" | grep -iE "content-encoding|cache-control|x-content-type|referrer|x-frame"
+   for p in "" privacy.html models/z1600-5000.html data/kb.json data/catalog.js assets/app.js sitemap.xml robots.txt; do curl -s $A -o /dev/null -w "%{http_code}  /$p\n" "$B/$p"; done      # все 200
+   for p in data/source/station_specs.json data/source/product_types.json data/naming.json README.md SKILL.md scripts/build_seo.py tests/bot_cases.json bot/DEPLOY.md .git/config .github/workflows/deploy.yml _config.yml CNAME net-takoj-stranicy; do curl -s $A -o /dev/null -w "%{http_code}  /$p\n" "$B/$p"; done   # все 404
+   curl -s $A "$B/" | grep -c 'name="robots"'                                    # 0: страницы открытого сайта без метатега (стенд закрыт паролем и заголовком)
+   curl -sI $A "$B/" | grep -iE "^(HTTP|x-robots-tag|strict-transport|cache-control|etag|content-type-options|x-frame)"     # no-cache, max-age=300; x-robots-tag: noindex, nofollow (только на стенде)
+   curl -sI $A "$B/assets/app.js" | grep -i "^cache-control"                     # public, max-age=300, must-revalidate
+   curl -sI $A "$B/img/hero.mp4" | grep -i "^cache-control"                      # public, max-age=2592000
+   curl -s $A -o /dev/null -D - -r 0-99 "$B/img/hero.mp4" | grep -iE "^(HTTP|content-range|accept-ranges)"     # 206, bytes 0-99/…
    ```
-4. Откройте preview в браузере (десктоп и телефон): главная, каталог, страница модели, видео, `Назад`.
-5. Проверьте редирект `www` (после переключения DNS): `curl -sI https://www.novaya-energy.ru/models/z800-1500.html` → `301`, `Location: https://novaya-energy.ru/models/z800-1500.html`.
+4. Откройте стенд в браузере (компьютер и телефон): главная, каталог, страница модели, видео, «Назад». Чат на стенде отвечать не будет (покажет контакты менеджера): адреса `preview` нет в `ALLOWED_ORIGINS`. Это ожидаемо, чат проверяется после переключения.
 
-Если `Accept-Ranges` или код 404 у `nonexistent-page` отличаются от ожидаемых, не переключайте DNS: сначала разберитесь с `Caddyfile` (`journalctl -u caddy`).
+Если какой-то код или заголовок отличается, DNS не переключайте: разберитесь (`journalctl -u caddy`).
 
-### 3.4. Порядок переключения DNS
+### 3.5. Снижение TTL до 300
 
-1. **За 1–2 суток** снизьте TTL A-записей `novaya-energy.ru` и `www` до 300 с (у регистратора или DNS-провайдера). Старый TTL запишите.
-2. Убедитесь, что выкладка прошла и пункт 3.3 проверен; бот на `bot.novaya-energy.ru` работает.
-3. **Переключение.** Смените A-запись `novaya-energy.ru` и `www` на адрес сервера (AAAA, если были, удалите или тоже переключите). Caddy выпустит сертификаты автоматически: `journalctl -u caddy -f`.
-4. **Проверка** с обычной сети и с мобильной: главная, страница модели, `https://www…` → редирект, `curl -sI https://novaya-energy.ru/` (200, `Cache-Control`), 404 на закрытых путях, `sitemap.xml`, `robots.txt`.
-5. GitHub Pages пока не отключайте (аварийный путь, пока репозиторий публичный). После нескольких дней работы без замечаний верните TTL к прежнему значению. Затем в Caddy включите HSTS (раскомментировать строку в `security_headers`) и, если нужно, переведите репозиторий в закрытый.
-6. После переезда проверьте чат (`CHAT_URL` в `assets/chat-launcher.js`, шаг 2.7) и по желанию включите автозапуск деплоя.
+**За 1–2 суток до переключения** (не меньше прежнего TTL):
 
-### 3.5. Копия сборки для аварийного размещения в другом месте
+1. Запишите **все** текущие записи и их TTL в файл вне репозитория: без них откат займёт больше времени.
+   ```bash
+   dig novaya-energy.ru A +noall +answer; dig novaya-energy.ru AAAA +noall +answer
+   dig www.novaya-energy.ru CNAME +noall +answer; dig www.novaya-energy.ru A +noall +answer; dig www.novaya-energy.ru AAAA +noall +answer
+   dig +short CAA novaya-energy.ru      # если записи CAA есть, среди них должен быть letsencrypt.org
+   ```
+   Снимите также снимок экрана раздела DNS у провайдера.
+2. У записей `novaya-energy.ru` и `www` поставьте TTL 300, значения не меняйте.
+3. Проверка (через время прежнего TTL): `dig novaya-energy.ru A +noall +answer` — во втором столбце не больше 300.
+
+### 3.6. Переключение A-записей
+
+Выбирайте время с малой посещаемостью. Перед переключением ещё раз запустите **deploy-site** (smoke-тест снят), чтобы на сервере лежала актуальная версия.
+
+1. В DNS **удалите все записи GitHub**: все A-записи `novaya-energy.ru`, **все AAAA-записи (IPv6)** и запись `www` (обычно это CNAME на `*.github.io` или такие же A и AAAA).
+2. Создайте: `novaya-energy.ru` A → адрес сервера; `www` A → адрес сервера (или CNAME → `novaya-energy.ru`). AAAA добавляйте только если у сервера есть рабочий IPv6 и порты 80 и 443 по нему открыты; иначе AAAA не должно быть совсем, иначе часть посетителей и Let's Encrypt пойдут не туда.
+3. Сразу после этого на сервере раскомментируйте блоки `www.novaya-energy.ru` и `novaya-energy.ru` и примените:
+   ```bash
+   sudo nano /etc/caddy/Caddyfile
+   sudo caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile && sudo systemctl reload caddy
+   journalctl -u caddy -f               # дождитесь «certificate obtained successfully» для обоих имён
+   ```
+   Пока сертификат не выпущен (обычно до минуты после обновления DNS), HTTPS на основном домене отвечает ошибкой. Если выпуск не прошёл, потому что DNS ещё не обновился, Caddy повторяет попытки сам; ускорить: `sudo systemctl restart caddy`.
+4. Редирект `www` → основной домен делает Caddy (блок `www.novaya-energy.ru`), в DNS для этого ничего не нужно.
+
+### 3.7. Проверки после переключения
+
+С сервера или своего компьютера, затем из мобильной сети:
+```bash
+dig +short A novaya-energy.ru; dig +short AAAA novaya-energy.ru; dig +short www.novaya-energy.ru      # только новые значения
+curl -sI https://novaya-energy.ru/ | grep -iE "^(HTTP|server|x-robots-tag|strict-transport|cache-control|etag)"
+#   200; строки server с GitHub.com нет; строки x-robots-tag НЕТ; max-age=300; no-cache
+for p in "" privacy.html models/z1600-5000.html sitemap.xml robots.txt data/kb.json; do printf "%s  /%s\n" "$(curl -sI "https://novaya-energy.ru/$p" | grep -ci '^x-robots-tag')" "$p"; done     # везде 0
+echo | openssl s_client -connect novaya-energy.ru:443 -servername novaya-energy.ru 2>/dev/null | openssl x509 -noout -issuer -subject -dates     # Let's Encrypt, срок не истёк
+curl -sI https://www.novaya-energy.ru/models/z800-1500.html | grep -iE "^(HTTP|location)"      # 301, Location: https://novaya-energy.ru/models/z800-1500.html
+curl -sI http://novaya-energy.ru/ | grep -iE "^(HTTP|location)"                                # 308 на https
+curl -s https://novaya-energy.ru/robots.txt                                                    # Allow: /, Sitemap; без Disallow
+curl -s https://novaya-energy.ru/sitemap.xml | grep -c "<loc>"                                 # 31
+curl -s -o /dev/null -w "%{http_code}\n" https://novaya-energy.ru/net-takoj-stranicy           # 404
+curl -s https://novaya-energy.ru/ | grep -c 'name="robots"'                                    # 0 (открыт для индексации)
+curl -s https://novaya-energy.ru/models/z1600-5000.html | grep -c 'name="robots"'              # 0
+curl -s https://novaya-energy.ru/net-takoj-stranicy | grep -o '<meta name="robots"[^>]*>'      # noindex: только у страницы 404
+curl -sI https://bot.novaya-energy.ru/ | grep -i x-robots-tag                                  # noindex, nofollow: бот закрыт
+curl -s -o /dev/null -D - -r 0-99 https://novaya-energy.ru/img/hero.mp4 | grep -iE "^(HTTP|content-range|accept-ranges)"   # 206
+curl -s https://bot.novaya-energy.ru/health                                                    # {"ok":true}
+```
+- Запустите **deploy-site** с включённым smoke-тестом: он должен пройти.
+- В браузере: главная, страница модели, видео; **чат** на главной и на странице модели отвечает (если 403: проверьте `ALLOWED_ORIGINS`, раздел 4). Ответы модели приходят только при действующем `PROVIDER_API_KEY`: если ключ не активен, виджет показывает контакты менеджера. К переносу это не относится и поводом для отката не является: проверьте тогда только, что чат открывается и запрос доходит до `bot.novaya-energy.ru`; после замены или активации ключа выполните `docker compose up -d`.
+- Уберите блок `preview.novaya-energy.ru` из `/etc/caddy/Caddyfile` (`reload`) и удалите A-запись `preview`.
+
+**С этого момента push в `main` сам боевой сайт не обновляет:** до пункта 3.10 после каждого изменения запускайте deploy-site вручную.
+
+### 3.8. Откат за 5 минут
+
+Пока GitHub Pages включён и в его настройках указан домен:
+1. В DNS удалите новые записи `novaya-energy.ru` и `www` и верните записи GitHub из пункта 3.5 (все A, все AAAA, `www`) с TTL 300. Если запись о них потерялась, стандартные значения есть в документации GitHub «Managing a custom domain for your GitHub Pages site».
+2. Подождите до 5 минут и проверьте: `curl -sI https://novaya-energy.ru/ | grep -i "^server"` → `GitHub.com`.
+3. Сервер не трогайте: бот продолжает работать. Если чат не читает базу знаний, задайте `KB_URL` (пункт 3.1).
+
+GitHub Pages публикует `main`, поэтому там та же версия сайта, тоже открытая для индексации. Адреса страниц не меняются.
+
+### 3.9. Отключение GitHub Pages
+
+Только после нескольких дней работы без замечаний: после этого быстрого отката нет.
+1. Убедитесь, что в DNS не осталось ни одной записи на GitHub (`dig` из пункта 3.7). Это обязательно: домен, который ведёт на GitHub, но не привязан к репозиторию, может занять посторонний.
+2. GitHub → Settings → Pages: удалите Custom domain и отключите публикацию. При удалении домена GitHub может сам сделать коммит, убирающий файл `CNAME`: после этого выполните `git pull`.
+3. Верните TTL записей к прежнему значению. Только теперь, если нужно, делайте репозиторий закрытым (бесплатный GitHub Pages для закрытого репозитория не работает).
+
+### 3.10. Включение автодеплоя
+
+В `.github/workflows/deploy.yml` снимите комментарий с двух строк `push:` и `branches: [main]`, закоммитьте. После этого каждый push в `main` выкладывает сайт и запускает smoke-тест. Проверка: Actions → последний запуск **deploy-site** зелёный.
+
+### 3.11. Через неделю: HSTS на год
+
+Если неделя прошла без проблем с HTTPS, в `bot/deploy/Caddyfile` и в `/etc/caddy/Caddyfile` замените `max-age=300` на `max-age=31536000` в строке `Strict-Transport-Security`:
+```bash
+sudo caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile && sudo systemctl reload caddy
+curl -sI https://novaya-energy.ru/ | grep -i strict-transport-security      # max-age=31536000
+```
+Быстро отменить это нельзя: браузеры будут требовать HTTPS целый год. `includeSubDomains` добавляйте только потом и только убедившись, что **все** поддомены работают по HTTPS.
+
+### 3.12. Индексация и поисковые кабинеты
+
+Сайт открыт, поэтому после переезда нужно убедиться, что он таким и остался, и сообщить поисковикам, что всё на месте. Адреса не менялись, переадресации настраивать не нужно.
+
+- [ ] Проверки из пункта 3.7 про `x-robots-tag` и `name="robots"` дали ожидаемое: на основном домене запретов нет; `robots.txt` с `Allow: /`; в `sitemap.xml` 31 адрес.
+- [ ] Яндекс Вебмастер и Google Search Console: сайт добавлен и подтверждён (если ещё нет: коды `yandex_verification`, `google_verification` в `scripts/seo.json` вписывает владелец, затем `python scripts/build_all.py`, коммит и выкладка). Проверка главной и одной страницы модели в «Проверке ответа сервера» (Яндекс) и «Проверке URL» (Google): код 200, индексирование разрешено.
+- [ ] В оба кабинета отправлен (или проверен) `https://novaya-energy.ru/sitemap.xml`.
+- [ ] Первые две недели после переезда смотрите в кабинетах ошибки обхода (коды 5xx, 404, недоступный `robots.txt`).
+- [ ] IndexNow — только по команде владельца: `python scripts/indexnow.py` (показывает, что уйдёт), затем `python scripts/indexnow.py --send`. Для самого переезда отправлять ничего не требуется: адреса и тексты те же.
+- [ ] Метрика — только вместе с согласием на cookie: `ym_counter_id` в `scripts/seo.json`, `build_all.py`, `python tests/consent_check.py`, выкладка. Проверка в браузере: появился баннер, счётчик загружается только после «Принять», в политике есть раздел про аналитику.
+
+**Если сайт нужно временно закрыть** (только по решению владельца: поисковики уберут страницы из выдачи, а возвращаются они не сразу):
+1. `INDEXABLE = False` в `scripts/indexing.py`; строка `header X-Robots-Tag "noindex, nofollow"` в блоке `novaya-energy.ru` в `bot/deploy/Caddyfile` **и** в `/etc/caddy/Caddyfile` на сервере (`validate`, `reload`).
+2. `python scripts/build_all.py`, `python tests/seo_check.py` (сверяет страницы и `Caddyfile` с константой), коммит, выкладка; smoke-тест проверит `noindex` на главной.
+3. `robots.txt` не трогайте и `Disallow` не добавляйте: иначе поисковик не прочитает `noindex`. Открыть обратно: те же шаги в обратную сторону.
+
+### 3.13. Копия сборки для аварийного размещения в другом месте
 
 - Каждая выкладка сохраняет артефакт `site-build` (zip готовых файлов сайта, 30 дней): Actions → нужный запуск → Artifacts. Его можно распаковать в любой статический хостинг (Caddy/nginx, объектное хранилище, GitHub Pages), структура уже без внутренних путей.
 - Дополнительно на сервере (раз в неделю, `crontab -e` пользователя `deploy`): `tar czf ~/site-$(date +%F).tgz -C /srv/site . && find ~ -name 'site-*.tgz' -mtime +30 -delete`, и копирование архива на другое хранилище (rclone/scp; настройки подключения хранятся только на сервере).
-- Аварийное переключение: развернуть копию на другом сервере или хостинге, переключить A-записи (TTL остаётся 300 с), проверить по списку из 3.3.
+- Аварийное переключение: развернуть копию на другом сервере или хостинге, переключить A-записи (TTL 300 с), проверить по списку из 3.7.
 
 ## 4. Если что-то не работает
 
@@ -146,6 +312,7 @@ sudo -u deploy sh -c 'cat /home/deploy/.ssh/id_deploy.pub >> /home/deploy/.ssh/a
 | Бот не запускается, в логе `config_error: …` | исправьте названную переменную в `.env` (значение в сообщении не печатается) |
 | Уведомления в Telegram не приходят | в логах `tg_error: …`; проверка прокси (шаг 2.3), токен, chat id; бот не должен быть заблокирован менеджером |
 | 403 в чате с сайта | `ALLOWED_ORIGINS` в `.env` (должны быть оба адреса сайта) |
+| Чат перестал отвечать после переноса сайта, в логе `EACCES` или `ENOENT` про `kb.json` | права и каталог из пункта 3.1, затем `docker compose up -d --force-recreate`; запасной вариант `KB_URL` |
 | 502 на `bot.novaya-energy.ru` | контейнер не запущен или порт не `127.0.0.1:8787` |
 | Сертификат не выпускается | A-запись домена указывает на сервер? порты 80 и 443 открыты? `journalctl -u caddy` |
 

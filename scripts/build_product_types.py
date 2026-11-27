@@ -15,6 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import analytics  # noqa: E402
+import indexing  # noqa: E402
 import product_types as PT  # noqa: E402
 import site_shell as SH  # noqa: E402
 
@@ -41,6 +42,8 @@ def write_if_changed(path, text):
 def page(title, desc, canonical, og_image, ld, crumbs_html, content, og_type="product"):
     consent = analytics.consent_tag(SEO, "../")
     consent = (consent + "\n") if consent else ""
+    robots = indexing.robots_meta()
+    robots = ("\n" + robots) if robots else ""
     ld_json = json.dumps(ld, ensure_ascii=False, separators=(",", ":")).replace("<", chr(92) + "u003c")
     return f"""<!DOCTYPE html>
 <html lang="ru">
@@ -50,7 +53,7 @@ def page(title, desc, canonical, og_image, ld, crumbs_html, content, og_type="pr
 <meta name="format-detection" content="telephone=no">
 <title>{esc(title)}</title>
 <meta name="description" content="{esc(desc)}">
-<link rel="canonical" href="{esc(canonical)}">
+<link rel="canonical" href="{esc(canonical)}">{robots}
 <meta property="og:type" content="{og_type}">
 <meta property="og:site_name" content="{esc(SH.SITE_NAME)}">
 <meta property="og:title" content="{esc(title)}">
@@ -190,12 +193,14 @@ def redirect_target_path(src):
 
 
 def redirect_page(to):
+    robots = indexing.robots_meta()
+    robots = ("\n" + robots) if robots else ""
     return f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
 <title>Страница перемещена | {SH.SITE_NAME}</title>
-<link rel="canonical" href="{esc(PT.SITE_URL.rstrip('/') + to)}">
+<link rel="canonical" href="{esc(PT.SITE_URL.rstrip('/') + to)}">{robots}
 <meta http-equiv="refresh" content="0; url={esc(to)}">
 </head>
 <body>
@@ -212,7 +217,10 @@ def caddy_fragment(reds):
              "# Пока в redirects.json нет записей, файл пустой."]
     for i, r in enumerate(reds, 1):
         lines.append("@redirect%d path %s" % (i, r["from"]))
-        lines.append("redir @redirect%d %s 301" % (i, r["to"]) if r["code"] == 301 else 'respond @redirect%d "Страница удалена" 410' % i)
+        if r["code"] == 301:
+            lines.append("redir @redirect%d %s 301" % (i, r["to"]))
+        else:   # respond выполняется после handle, поэтому без своего блока handle его перехватил бы общий handle сайта (было бы 404 вместо 410)
+            lines += ["handle @redirect%d {" % i, '\trespond "Страница удалена" 410', "}"]
     return "\n".join(lines) + "\n"
 
 

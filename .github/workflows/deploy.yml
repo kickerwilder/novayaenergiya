@@ -8,11 +8,18 @@
 #   DEPLOY_PORT         порт SSH (необязательно, по умолчанию 22)
 # Сборка не нужна: готовые файлы (index.html, models/*.html, data/*.js, kb.json, sitemap.xml) закоммичены scripts/build_all.py;
 # шаг «Проверка» лишь убеждается, что закоммиченное совпадает с результатом сборки.
+# Границы изменений на сервере: единственная команда, которая пишет на сервер, это rsync с назначением /srv/site/. Ключ --delete удаляет
+# только то, что лежит внутри /srv/site и чего нет в сборке (в том числе положенное туда вручную); вне /srv/site rsync ничего не меняет.
 
 name: deploy-site
 
 on:
   workflow_dispatch:
+    inputs:
+      smoke:
+        description: "После выкладки проверить https://novaya-energy.ru (выключить, пока домен ещё не смотрит на этот сервер)"
+        type: boolean
+        default: true
   # Автозапуск по пушу в main: включить, когда владелец скажет (снять комментарий).
   # push:
   #   branches: [main]
@@ -53,7 +60,7 @@ jobs:
             --exclude '/node_modules/' --exclude '/Gemfile*' --exclude '/vendor/' \
             ./ _site/
           # страховка: во внутренних путях ничего не осталось, а нужное сайту на месте
-          for p in data/source data/naming.json README.md SKILL.md scripts tests bot .claude .git _config.yml; do
+          for p in data/source data/naming.json README.md SKILL.md scripts tests bot .claude .git .github .gitignore .dockerignore _config.yml CNAME; do
             if [ -e "_site/$p" ]; then echo "Во внутренние файлы попал: $p"; exit 1; fi
           done
           for p in index.html privacy.html 404.html robots.txt sitemap.xml data/catalog.js data/kb.json assets/app.js assets/styles.css; do
@@ -84,6 +91,45 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
-          rsync -az --delete \
+          : "${DEPLOY_HOST:?не задан секрет DEPLOY_HOST}"
+          : "${DEPLOY_USER:?не задан секрет DEPLOY_USER}"
+          # назначение задано в команде и не берётся из переменных: --delete действует только внутри /srv/site/.
+          # --chmod: публичная статика читается всеми (каталоги 755, файлы 644), чтобы Caddy и бот в контейнере могли читать файлы
+          rsync -az --delete --chmod=D755,F644 --no-owner --no-group \
             -e "ssh -i $HOME/.ssh/id_deploy -p ${DEPLOY_PORT:-22} -o StrictHostKeyChecking=yes -o BatchMode=yes" \
             _site/ "$DEPLOY_USER@$DEPLOY_HOST:/srv/site/"
+
+      - name: Smoke-тест (https)
+        if: github.event_name != 'workflow_dispatch' || inputs.smoke
+        env:
+          BASE: https://novaya-energy.ru
+        run: |
+          set -euo pipefail
+          indexable=$(python3 -c 'import sys; sys.path.insert(0, "scripts"); import indexing; print(1 if indexing.INDEXABLE else 0)')
+          tmp=$(mktemp -d)
+          failed=0
+          for path in / /models/z1600-5000.html /data/kb.json /robots.txt; do
+            name=$(printf '%s' "$path" | tr '/.' '__')
+            code=$(curl -sS --retry 5 --retry-delay 5 --retry-all-errors --connect-timeout 10 --max-time 30 \
+              -o "$tmp/$name" -D "$tmp/$name.headers" -w '%{http_code}' "$BASE$path") || code="${code:-000}"
+            echo "$code  $BASE$path"
+            if [ "$code" != "200" ]; then echo "::error::$path: код $code, нужен 200"; failed=1; fi
+            if grep -qi '^server:.*github' "$tmp/$name.headers" 2>/dev/null; then
+              echo "::error::$path: отвечает GitHub Pages, домен ещё не смотрит на этот сервер"; failed=1
+            fi
+          done
+          # индексация (константа INDEXABLE в scripts/indexing.py). Открыта (True): на главной и странице модели нет метатега noindex,
+          # ни на одном адресе нет заголовка X-Robots-Tag с noindex, а robots.txt не запрещает обход. Закрыта (False): на главной есть noindex.
+          if [ "$indexable" = "1" ]; then
+            blocked=0
+            for page in _ _models_z1600-5000_html; do
+              if grep -qi '<meta name="robots"[^>]*noindex' "$tmp/$page" 2>/dev/null; then echo "::error::индексация открыта, а на странице есть метатег noindex ($page)"; blocked=1; fi
+            done
+            if grep -qiE '^x-robots-tag:.*(noindex|none)' "$tmp"/*.headers 2>/dev/null; then echo "::error::индексация открыта, а сервер отдаёт заголовок X-Robots-Tag с noindex (проверьте блок novaya-energy.ru в Caddyfile)"; blocked=1; fi
+            if grep -qiE '^disallow:[[:space:]]*/[[:space:]]*$' "$tmp/_robots_txt" 2>/dev/null; then echo "::error::robots.txt запрещает обход всего сайта"; blocked=1; fi
+            if [ "$blocked" = "0" ]; then echo "сайт открыт для индексации: noindex нет ни в страницах, ни в заголовках, robots.txt обход не запрещает"; else failed=1; fi
+          else
+            if grep -q '<meta name="robots" content="noindex,nofollow">' "$tmp/_" 2>/dev/null; then echo "noindex на главной есть (индексация закрыта)"
+            else echo "::error::на главной нет метатега noindex, а индексация закрыта"; failed=1; fi
+          fi
+          [ "$failed" = "0" ]

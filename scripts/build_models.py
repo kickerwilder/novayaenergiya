@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import analytics  # noqa: E402
 import site_shell as SH  # noqa: E402
+import indexing  # noqa: E402
 import product_types as PT  # noqa: E402
 import naming as nm  # noqa: E402
 
@@ -617,6 +618,8 @@ def build_page(combo, data, prices, charge, all_combos):
     CONSENT = analytics.consent_tag(SEO, "../")           # баннер и счётчик: только при заданном ym_counter_id (assets/consent.js)
     CONSENT = (CONSENT + chr(10)) if CONSENT else ""
     COOKIE_LINK = analytics.settings_link(SEO)            # «Настройки cookie» в подвале: только при заданном ym_counter_id
+    ROBOTS = indexing.robots_meta()                      # noindex, пока INDEXABLE = False (scripts/indexing.py)
+    ROBOTS = (chr(10) + ROBOTS) if ROBOTS else ""
     NAV_EXTRA = PT.nav_extra("../")                        # пункты навигации разделов новых типов товаров (пусто, пока таких разделов нет)
     doc = f"""<!DOCTYPE html>
 <html lang="ru">
@@ -626,7 +629,7 @@ def build_page(combo, data, prices, charge, all_combos):
 <meta name="format-detection" content="telephone=no">
 <title>{esc(page_title)}</title>
 <meta name="description" content="{esc(meta_desc)}">
-<link rel="canonical" href="{esc(canonical)}">
+<link rel="canonical" href="{esc(canonical)}">{ROBOTS}
 <meta property="og:type" content="product">
 <meta property="og:site_name" content="{esc(SITE_NAME)}">
 <meta property="og:title" content="{esc(page_title)}">
