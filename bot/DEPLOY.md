@@ -33,9 +33,9 @@ sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sud
 
 1. **Код.** Репозиторий (после перехода станет закрытым) клонируется на сервер по deploy-ключу с доступом «только чтение» (GitHub → Settings → Deploy keys):
    ```bash
-   sudo mkdir -p /opt/novaya && sudo chown "$USER": /opt/novaya
-   git clone git@github.com:kickerwilder/novayaenergiya.git /opt/novaya/repo
-   cd /opt/novaya/repo/bot
+   sudo mkdir -p /opt/novaya-bot && sudo chown "$USER": /opt/novaya-bot
+   git clone git@github.com:kickerwilder/novayaenergiya.git /opt/novaya-bot/repo
+   cd /opt/novaya-bot/repo/bot
    ```
 2. **Настройки.** Создайте `bot/.env` по образцу `example.env` и заполните (файл в `.gitignore`, в чаты и в репозиторий не вставлять):
    ```bash
@@ -81,7 +81,7 @@ sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sud
    ```
 6. **Caddy и поддомен бота.** Нужен Caddy 2.8 или новее. В DNS создайте A-запись `bot.novaya-energy.ru` на адрес сервера. Затем:
    ```bash
-   sudo cp /opt/novaya/repo/bot/deploy/Caddyfile /etc/caddy/Caddyfile
+   sudo cp /opt/novaya-bot/repo/bot/deploy/Caddyfile /etc/caddy/Caddyfile
    sudo nano /etc/caddy/Caddyfile        # e-mail вместо ВАШ_EMAIL; пока основной домен смотрит на GitHub, закомментируйте блоки www.novaya-energy.ru и novaya-energy.ru (пункт 3.2)
    caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy
    ```
@@ -96,7 +96,7 @@ sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sud
 7. **Подключение чата к сайту.** В `assets/chat-launcher.js` задайте адрес бота: `var CHAT_URL = "https://bot.novaya-energy.ru";` (постоянная вверху файла; один адрес для главной и всех страниц моделей), закоммитьте и выложите сайт. При пустом значении кнопка чата на сайте не показывается. Если бот недоступен (сеть, таймаут, ошибка), виджет показывает контакты менеджера вместо ошибки.
 8. **Проверка уведомления.** Задайте на сайте вопрос, на который бот отправит к менеджеру (например, «Какая мощность зарядного устройства у ZF28-2003.8?»): менеджеру придёт сообщение с сутью вопроса (телефоны, e-mail и ФИО заменены метками) и временем, один раз на диалог.
 
-Обновление бота: `cd /opt/novaya/repo && git pull && cd bot && docker compose up -d --build`. Смена ключа или прокси: правка `.env` и `docker compose up -d`.
+Обновление бота: `cd /opt/novaya-bot/repo && git pull && cd bot && docker compose up -d --build`. Смена ключа или прокси: правка `.env` и `docker compose up -d`.
 
 ## 3. Перенос сайта с GitHub Pages
 
@@ -133,7 +133,7 @@ sudo -u nobody ls /srv/site/data > /dev/null && echo "чтение: ok"
 sudo -u nobody test -w /srv/site && echo "ПЛОХО: пишет посторонний" || echo "запись посторонним закрыта: ok"
 ```
 
-Если бот уже работает, посмотрите, откуда он сейчас берёт базу знаний (команда печатает только число): `grep -c '^KB_URL=http' /opt/novaya/repo/bot/.env` (`1` — скачивает по адресу, `0` — читает `/srv/site/data/kb.json`). После изменения прав и каталога перезапустите контейнер: `cd /opt/novaya/repo/bot && docker compose up -d --force-recreate`.
+Если бот уже работает, посмотрите, откуда он сейчас берёт базу знаний (команда печатает только число): `grep -c '^KB_URL=http' /opt/novaya-bot/repo/bot/.env` (`1` — скачивает по адресу, `0` — читает `/srv/site/data/kb.json`). После изменения прав и каталога перезапустите контейнер: `cd /opt/novaya-bot/repo/bot && docker compose up -d --force-recreate`.
 
 **Запасной вариант**, если бот не читает файл из тома: в `bot/.env` задайте `KB_URL=https://novaya-energy.ru/data/kb.json` и выполните `docker compose up -d`. Бот будет скачивать базу с сайта напрямую (не через `PROXY_URL`), кэш 5 минут; при временном сбое работает на прошлой копии.
 
@@ -143,7 +143,7 @@ sudo -u nobody test -w /srv/site && echo "ПЛОХО: пишет посторо�
 2. Обновите конфигурацию Caddy (нужна версия 2.8 или новее: `caddy version`):
    ```bash
    sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak-$(date +%F)
-   sudo cp /opt/novaya/repo/bot/deploy/Caddyfile /etc/caddy/Caddyfile
+   sudo cp /opt/novaya-bot/repo/bot/deploy/Caddyfile /etc/caddy/Caddyfile
    caddy hash-password                  # спросит пароль для стенда и напечатает хэш
    sudo nano /etc/caddy/Caddyfile
    ```
@@ -179,7 +179,7 @@ sudo -u nobody test -w /srv/site && echo "ПЛОХО: пишет посторо�
 2. На сервере:
    ```bash
    stat -c '%a %U:%G %n' /srv/site /srv/site/data /srv/site/data/kb.json /srv/site/index.html     # 755, 755, 644, 644
-   cd /opt/novaya/repo/bot && docker compose exec bot node -e "JSON.parse(require('fs').readFileSync('/app/data/kb.json','utf8')); console.log('kb.json читается')"
+   cd /opt/novaya-bot/repo/bot && docker compose exec bot node -e "JSON.parse(require('fs').readFileSync('/app/data/kb.json','utf8')); console.log('kb.json читается')"
    ```
 3. Стенд (подставьте пароль стенда; в историю команд он попадёт, поэтому после проверки смените его или уберите блок):
    ```bash
@@ -343,7 +343,7 @@ curl -sI https://novaya-energy.ru/ | grep -i strict-transport-security      # ma
 
 1. Выберите модель, прогнав кейсы (раздел 5.3), не меняя боевой `.env`.
 2. Сохраните копию `bot/.env` (`cp .env .env.gemini`, права `600`), затем в `.env` замените переменные по таблице выше.
-3. Перезапустите: `cd /opt/novaya/repo/bot && docker compose up -d`. В логе (`docker compose logs bot`) не должно быть `config_error`; при запуске печатается `provider=openai model=…`.
+3. Перезапустите: `cd /opt/novaya-bot/repo/bot && docker compose up -d`. В логе (`docker compose logs bot`) не должно быть `config_error`; при запуске печатается `provider=openai model=…`.
 4. Проверка: `curl -s http://127.0.0.1:8787/health`, затем несколько вопросов в чате на сайте. В логе должны появиться строки `llm_usage` с токенами.
 5. Первые дни следите за логом: частые `llm_retry` и `llm_fail` означают лимиты провайдера (`http 429`) или сбои (`http 5xx`), `timeout` и `network` означают недоступность адреса или прокси, `length`, `empty`, `bad_args` и `bad_json` означают, что модель вернула пустой, обрезанный или некорректный ответ (бот в таком случае переходит к запасной модели).
 
@@ -352,7 +352,7 @@ curl -sI https://novaya-energy.ru/ | grep -i strict-transport-security      # ma
 Скрипт `bot/tools/eval_cases.js` прогоняет `tests/bot_cases.json` на выбранных провайдере и модели и печатает таблицу: кейс, прошёл или нет, число попыток, время, токены на входе и выходе, стоимость. В боевом запуске он не участвует; ключ он берёт из `bot/.env` или окружения и не печатает. Уведомления в Telegram на время прогона выключены.
 
 ```bash
-cd /opt/novaya/repo/bot        # на сервере или на своём компьютере, где есть репозиторий и выполнен npm ci
+cd /opt/novaya-bot/repo/bot        # на сервере или на своём компьютере, где есть репозиторий и выполнен npm ci
 node tools/eval_cases.js --provider openai --model НАЗВАНИЕ_ИЗ_КАБИНЕТА --delay-ms 2000 --price-in ЦЕНА_ВХОД --price-out ЦЕНА_ВЫХОД
 ```
 
